@@ -152,7 +152,7 @@ export default function Home() {
           schema: 'public',
           table: 'leads'
         },
-        (payload) => {
+        (payload:any) => {
           console.log('New lead received:', payload.new);
           setLeads(prev => [payload.new, ...prev]);
           setStats(prev => ({
