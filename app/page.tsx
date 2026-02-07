@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Sparkles, Zap, Crown, Target, TrendingUp, Clock, Filter, Shield, Rocket, DollarSign, Users, CheckCircle, X } from 'lucide-react';
 
-// ✅ Type-safe interfaces
+// ✅ Type-safe interfaces with all required fields
 interface Lead {
   id: string;
   title: string;
@@ -20,6 +20,11 @@ interface Lead {
   created_at: string;
   status?: 'pending' | 'applied' | 'closed';
   applied_at?: string;
+}
+
+interface LeadUpdate {
+  status: 'pending' | 'applied' | 'closed';
+  applied_at: string;
 }
 
 interface CreditPlan {
@@ -190,17 +195,18 @@ export default function Home() {
           .limit(20);
 
         if (!error && data) {
-          setLeads(data as Lead[]);
+          const typedData = data as Lead[];
+          setLeads(typedData);
           
           const today = new Date();
-          const todayLeads = data.filter((lead: Lead) => {
+          const todayLeads = typedData.filter((lead: Lead) => {
             const leadDate = new Date(lead.created_at);
             return leadDate.toDateString() === today.toDateString();
           }).length;
 
           setStats(prev => ({
             ...prev,
-            totalLeads: data.length,
+            totalLeads: typedData.length,
             todayLeads
           }));
         }
@@ -223,9 +229,10 @@ export default function Home() {
           schema: 'public',
           table: 'leads'
         },
-        (payload: { new: Lead }) => {
+        (payload) => {
           console.log('New lead received:', payload.new);
-          setLeads(prev => [payload.new, ...prev]);
+          const newLead = payload.new as Lead;
+          setLeads(prev => [newLead, ...prev]);
           setStats(prev => ({
             ...prev,
             totalLeads: prev.totalLeads + 1,
@@ -271,7 +278,7 @@ export default function Home() {
     { icon: '🎯', title: 'Advanced Filters', desc: 'Filter by budget & verified clients' }
   ];
 
-  // ✅ Handle Snipe with proper error handling
+  // ✅ FIXED: Handle Snipe with proper typing
   const handleSnipe = async (lead: Lead) => {
     if (credits > 0 || isPro) {
       // Deduct credit if not pro
@@ -280,13 +287,15 @@ export default function Home() {
       }
 
       try {
-        // ✅ CORRECT: Properly typed update without 'as any'
+        // ✅ CORRECT: Properly typed update with explicit interface
+        const updateData: LeadUpdate = { 
+          status: 'applied', 
+          applied_at: new Date().toISOString() 
+        };
+
         const { error } = await supabase
           .from('leads')
-          .update({ 
-            status: 'applied', 
-            applied_at: new Date().toISOString() 
-          })
+          .update(updateData)
           .eq('id', lead.id);
 
         if (error) {
@@ -295,7 +304,11 @@ export default function Home() {
           // Update local state
           setLeads(prev => prev.map(l => 
             l.id === lead.id 
-              ? { ...l, status: 'applied', applied_at: new Date().toISOString() }
+              ? { 
+                  ...l, 
+                  status: 'applied', 
+                  applied_at: new Date().toISOString() 
+                } as Lead
               : l
           ));
         }
