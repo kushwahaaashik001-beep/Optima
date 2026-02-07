@@ -188,13 +188,13 @@ export default function Home() {
     const fetchLeads = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from<any>('leads') // ✅ FIX: Added <any>
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(20);
-
-        if (!error && data) {
+        // Is baar humne 'supabase' ke saath (as any) lagaya hai
+const { data, error } = await (supabase as any)
+  .from('leads') 
+  .select('*')
+  .order('created_at', { ascending: false })
+  .limit(20);
+if (!error && data) {
           const typedData = data as Lead[];
           setLeads(typedData);
           
