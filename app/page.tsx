@@ -198,7 +198,7 @@ export default function Home() {
       try {
         await supabase
           .from('leads')
-          .update({ status: 'applied', applied_at: new Date().toISOString() })
+          .update({ status: 'applied', applied_at: new Date().toISOString() } as any)
           .eq('id', lead.id);
       } catch (error) {
         console.error('Error updating lead:', error);
