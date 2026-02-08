@@ -297,10 +297,10 @@ export default function OptimaCommandCenter() {
 
     // Setup Telegram notifications for Pro users
     if (user?.telegram_id) {
-      notificationIntervalRef.current = setInterval(() => {
-        checkAndSendTelegramNotifications()
-      }, 10000)
-    }
+  notificationIntervalRef.current = setInterval(() => {
+    // checkAndSendTelegramNotifications()  
+  }, 10000)
+}
 
     // Play sound for new leads
     if (notificationEnabled && audioRef.current) {
