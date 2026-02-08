@@ -102,7 +102,6 @@ import {
   AtSign,
   Asterisk,
   Slash,
-  Backspace,
   Delete,
   Edit,
   Edit2,
