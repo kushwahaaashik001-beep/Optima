@@ -20,7 +20,8 @@ import {
   XCircle,
   MessageSquare,
   Star,
-  Zap
+  Zap,
+  Lock
 } from 'lucide-react'
 
 interface JobCardProps {
