@@ -1,23 +1,25 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase, subscribeToLeads, subscribeToLogs, type Lead, type SystemLog, type EngineState } from '@/lib/supabase';
+import { supabase, subscribeToLeads, type Lead, type SystemLog } from '@/lib/supabase';
 import { 
   Sparkles, Zap, Crown, Target, TrendingUp, Clock, Filter, Shield, 
   Rocket, DollarSign, Users, CheckCircle, X, Cpu, Database, 
-  Globe, ShieldCheck, Activity, Cpu as Processor, Server, 
+  Globe, ShieldCheck, Activity, Server, 
   Wifi, WifiOff, AlertTriangle, Brain, Cloud, CloudLightning,
-  BarChart3, Settings, Terminal, Cog, GitBranch, Layers,
+  BarChart3, Settings, Terminal, Cogs, GitBranch, Layers,
   Network, RefreshCw, Play, Pause, StopCircle, GitMerge,
-  BrainCircuit, CircuitBoard, Satellite, Radar, Telescope
+  BrainCircuit, CircuitBoard, Satellite, Radar, Telescope,
+  ChevronRight, ExternalLink, Eye, EyeOff, Bell, BellOff,
+  Database as DatabaseIcon, Key, Globe as GlobeIcon,
+  Shield as ShieldIcon, Cpu as CpuIcon
 } from 'lucide-react';
 
-// ✅ Quantum Engine Types
-interface ScraperConfig {
-  key: string;
-  value: any;
-  category: string;
-  description: string;
+// ✅ Type Definitions
+interface QuantumButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'quantum' | 'primary' | 'success' | 'warning' | 'danger' | 'gradient';
+  size?: 'sm' | 'md' | 'lg';
+  loading?: boolean;
 }
 
 interface CreditPlan {
@@ -29,12 +31,12 @@ interface CreditPlan {
   features: string[];
 }
 
-// ✅ Quantum Engine Status
-const ENGINE_MODES = {
-  vacuum: { label: 'Vacuum Mode', color: 'from-purple-500 to-pink-500', icon: '🌀' },
-  targeted: { label: 'Targeted Search', color: 'from-blue-500 to-cyan-500', icon: '🎯' },
-  hybrid: { label: 'Hybrid Engine', color: 'from-green-500 to-emerald-500', icon: '⚡' }
-};
+interface ScraperConfig {
+  key: string;
+  value: any;
+  category: string;
+  description: string;
+}
 
 // ✅ Glass Effect Component
 const QuantumGlassCard = ({ 
@@ -66,18 +68,16 @@ const QuantumGlassCard = ({
   </div>
 );
 
-// ✅ Quantum Button
+// ✅ Quantum Button - FIXED: Added proper props interface
 const QuantumButton = ({ 
   children, 
   variant = "quantum",
   size = "md",
   loading = false,
   className = "",
+  disabled,
   ...props 
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'quantum' | 'primary' | 'success' | 'warning' | 'danger' | 'gradient';
-  size?: 'sm' | 'md' | 'lg';
-}) => {
+}: QuantumButtonProps) => {
   const variants = {
     quantum: "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700",
     primary: "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600",
@@ -95,6 +95,8 @@ const QuantumButton = ({
 
   return (
     <button
+      {...props}
+      disabled={loading || disabled}
       className={`
         ${variants[variant]} ${sizes[size]}
         rounded-xl font-bold text-white transition-all duration-300 
@@ -103,8 +105,6 @@ const QuantumButton = ({
         flex items-center justify-center gap-2
         ${className}
       `}
-      disabled={loading}
-      {...props}
     >
       {loading ? (
         <>
@@ -291,8 +291,8 @@ export default function Home() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [engineState, setEngineState] = useState<EngineState>({
-    mode: 'vacuum',
+  const [engineState, setEngineState] = useState({
+    mode: 'vacuum' as 'vacuum' | 'targeted' | 'hybrid',
     active_threads: 12,
     processed_today: 248,
     avg_response_time: 2.4,
@@ -347,6 +347,13 @@ export default function Home() {
     }
   ];
 
+  // ✅ ENGINE_MODES constant
+  const ENGINE_MODES = {
+    vacuum: { label: 'Vacuum Mode', color: 'from-purple-500 to-pink-500', icon: '🌀' },
+    targeted: { label: 'Targeted Search', color: 'from-blue-500 to-cyan-500', icon: '🎯' },
+    hybrid: { label: 'Hybrid Engine', color: 'from-green-500 to-emerald-500', icon: '⚡' }
+  };
+
   // ✅ Fetch initial data
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -359,7 +366,7 @@ export default function Home() {
           .order('created_at', { ascending: false })
           .limit(50);
 
-        if (leadsData) setLeads(leadsData as Lead[]);
+        if (leadsData) setLeads(leadsData as unknown as Lead[]);
 
         // Fetch recent logs
         const { data: logsData } = await supabase
@@ -368,7 +375,7 @@ export default function Home() {
           .order('timestamp', { ascending: false })
           .limit(20);
 
-        if (logsData) setLogs(logsData as SystemLog[]);
+        if (logsData) setLogs(logsData as unknown as SystemLog[]);
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -514,12 +521,10 @@ export default function Home() {
         {[...Array(20)].map((_, i) => (
           <div
             key={i}
-            className="absolute w-1 h-1 bg-blue-400/30 rounded-full animate-float"
+            className="absolute w-1 h-1 bg-blue-400/30 rounded-full"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-              animationDuration: `${10 + Math.random() * 20}s`
             }}
           />
         ))}
@@ -533,7 +538,7 @@ export default function Home() {
             <div className="flex flex-col lg:flex-row justify-between items-center gap-6">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 flex items-center justify-center shadow-2xl shadow-blue-500/40 animate-gradient-x">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 flex items-center justify-center shadow-2xl shadow-blue-500/40">
                     <BrainCircuit className="w-10 h-10" />
                   </div>
                   <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full animate-ping" />
@@ -594,14 +599,14 @@ export default function Home() {
         {/* Navigation Tabs */}
         <div className="flex gap-2 mb-6">
           {[
-            { id: 'leads', label: 'Quantum Leads', icon: <Sparkles className="w-4 h-4" /> },
-            { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
-            { id: 'logs', label: 'System Logs', icon: <Terminal className="w-4 h-4" /> },
-            { id: 'config', label: 'Engine Config', icon: <Cogs className="w-4 h-4" /> }
+            { id: 'leads' as const, label: 'Quantum Leads', icon: <Sparkles className="w-4 h-4" /> },
+            { id: 'analytics' as const, label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
+            { id: 'logs' as const, label: 'System Logs', icon: <Terminal className="w-4 h-4" /> },
+            { id: 'config' as const, label: 'Engine Config', icon: <Cogs className="w-4 h-4" /> }
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               className={`
                 flex items-center gap-2 px-5 py-3 rounded-xl transition-all duration-300
                 ${activeTab === tab.id
@@ -868,7 +873,7 @@ export default function Home() {
               ) : (
                 <QuantumGlassCard className="text-center py-16">
                   <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
-                    <Satellite className="w-12 h-12 text-blue-400 animate-spin-slow" />
+                    <Satellite className="w-12 h-12 text-blue-400" />
                   </div>
                   <h3 className="text-2xl font-bold mb-2">Scanning Quantum Field</h3>
                   <p className="text-gray-400 max-w-md mx-auto mb-6">
