@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Clock, 
-  MapPin, 
+  MapPin,
+  chevronUp,
+  ChevronDown,
   DollarSign, 
   Users,
   Calendar,
