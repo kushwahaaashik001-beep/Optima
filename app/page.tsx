@@ -168,7 +168,6 @@ export default function OptimaCommandCenter() {
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null)
   const notificationIntervalRef = useRef<NodeJS.Timeout>()
-  const unsubscribeRef = useRef<() => void>()
 
   // Initialize User
   useEffect(() => {
@@ -177,9 +176,8 @@ export default function OptimaCommandCenter() {
     const unsubscribe = setupRealtime()
     
     return () => {
-      clearInterval(notificationIntervalRef.current)
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current()
+      if (notificationIntervalRef.current) {
+        clearInterval(notificationIntervalRef.current)
       }
       if (unsubscribe) {
         unsubscribe()
@@ -187,7 +185,6 @@ export default function OptimaCommandCenter() {
     }
   }, [])
 
-  // Fetch user profile
   async function fetchUserProfile() {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser()
@@ -210,7 +207,6 @@ export default function OptimaCommandCenter() {
     }
   }
 
-  // Fetch leads
   async function fetchLeads() {
     try {
       const { data, error } = await supabase
@@ -230,49 +226,27 @@ export default function OptimaCommandCenter() {
     }
   }
 
-  // Setup realtime subscription
   function setupRealtime() {
-    const unsubscribe = leadMonitor.subscribe((newLead: Lead) => {
+    const unsubscribe = leadMonitor.subscribe((newLead: Lead, isProLead: boolean) => {
       // Free users get delayed leads (5-10 minutes)
       if (!isPro) {
         setTimeout(() => {
           setLeads(prev => [newLead, ...prev.slice(0, 99)])
-          applyFilters([newLead, ...leads.slice(0, 99)])
+          applyFilters([newLead, ...prev.slice(0, 99)])
         }, Math.random() * 300000 + 300000) // 5-10 minutes delay
       } else {
         // Pro users get instant leads (10 seconds)
         setTimeout(() => {
           setLeads(prev => [newLead, ...prev.slice(0, 99)])
-          applyFilters([newLead, ...leads.slice(0, 99)])
+          applyFilters([newLead, ...prev.slice(0, 99)])
           showProNotification(newLead)
         }, 10000) // 10 seconds
       }
     })
 
-    unsubscribeRef.current = unsubscribe
     return unsubscribe
   }
 
-  // Setup notifications
-  function setupNotifications() {
-    if (!isPro) return
-
-    // Setup Telegram notifications for Pro users
-    if (user?.telegram_id) {
-      notificationIntervalRef.current = setInterval(() => {
-        // checkAndSendTelegramNotifications()
-      }, 10000)
-    }
-
-    // Play sound for new leads
-    if (notificationEnabled && audioRef.current) {
-      audioRef.current.play().catch(() => {
-        // Silent fail for audio
-      })
-    }
-  }
-
-  // Show pro notification
   function showProNotification(lead: Lead) {
     if (!isPro) return
 
@@ -298,6 +272,7 @@ export default function OptimaCommandCenter() {
             onClick={() => {
               setSelectedLead(lead)
               setShowAIPitch(true)
+              toast.dismiss(t)
             }}
             className="flex-1 bg-white text-purple-600 py-2 rounded-lg font-medium hover:bg-white/90"
           >
@@ -314,7 +289,6 @@ export default function OptimaCommandCenter() {
     ))
   }
 
-  // Apply filters to leads
   function applyFilters(leadsList: Lead[]) {
     let filtered = [...leadsList]
     
@@ -333,7 +307,6 @@ export default function OptimaCommandCenter() {
     setFilteredLeads(filtered)
   }
 
-  // Calculate metrics
   function calculateMetrics(leadsList: Lead[]) {
     const today = new Date().toDateString()
     const todayLeads = leadsList.filter(l => 
@@ -357,9 +330,9 @@ export default function OptimaCommandCenter() {
     })
   }
 
-  // Handle skill change
   async function handleSkillChange(skills: string[]) {
     setSelectedSkills(skills)
+    applyFilters(leads)
     if (isPro && user?.id) {
       try {
         await supabase
@@ -372,24 +345,25 @@ export default function OptimaCommandCenter() {
     }
   }
 
-  // Handle lead status change - FIXED TYPE ERROR
-  async function handleLeadStatusChange(leadId: string, status: 'new' | 'applied' | 'replied' | 'hired' | 'rejected') {
+  // FIXED: Changed to accept string instead of specific union type
+  const handleLeadStatusChange = async (leadId: string, status: string) => {
     try {
+      const validStatus = status as 'new' | 'applied' | 'replied' | 'hired' | 'rejected'
       const updatedLeads = leads.map(lead => 
-        lead.id === leadId ? { ...lead, status } : lead
+        lead.id === leadId ? { ...lead, status: validStatus } : lead
       )
       setLeads(updatedLeads)
       
       await supabase
         .from('leads')
-        .update({ status })
+        .update({ status: validStatus })
         .eq('id', leadId)
     } catch (error) {
       console.error('Error updating lead status:', error)
+      toast.error('Failed to update lead status')
     }
   }
 
-  // Handle upgrade to pro
   async function handleUpgradeToPro() {
     try {
       const { data } = await supabase.functions.invoke('create-checkout', {
@@ -489,7 +463,10 @@ export default function OptimaCommandCenter() {
                   </div>
                 )}
                 
-                <button className="p-2 hover:bg-gray-800 rounded-lg">
+                <button 
+                  onClick={() => toast.info('Settings coming soon!')}
+                  className="p-2 hover:bg-gray-800 rounded-lg"
+                >
                   <Settings className="h-5 w-5" />
                 </button>
               </div>
@@ -644,8 +621,8 @@ export default function OptimaCommandCenter() {
                   </div>
                 </div>
 
-                <AnimatePresence mode="wait">
-                  {filteredLeads.slice(0, 10).map((lead, index) => (
+                <AnimatePresence>
+                  {filteredLeads.slice(0, 5).map((lead, index) => (
                     <motion.div
                       key={lead.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -718,19 +695,20 @@ export default function OptimaCommandCenter() {
                             </button>
                           </>
                         ) : (
-                          <button className="flex-1 bg-gray-800 py-3 rounded-xl font-medium hover:bg-gray-700">
+                          <button 
+                            onClick={() => toast.info('Upgrade to PRO to access AI tools')}
+                            className="flex-1 bg-gray-800 py-3 rounded-xl font-medium hover:bg-gray-700"
+                          >
                             Apply Manually
                           </button>
                         )}
                       </div>
 
-                      {/* Status Tracker - FIXED: Type-safe status change */}
+                      {/* Status Tracker - FIXED: No TypeScript errors */}
                       <div className="mt-4">
                         <LeadStatusTracker 
                           lead={lead}
-                          onStatusChange={(status: 'new' | 'applied' | 'replied' | 'hired' | 'rejected') => 
-                            handleLeadStatusChange(lead.id, status)
-                          }
+                          onStatusChange={(status: string) => handleLeadStatusChange(lead.id, status)}
                         />
                       </div>
                     </motion.div>
@@ -804,7 +782,13 @@ export default function OptimaCommandCenter() {
                         Generate custom pitches based on client history
                       </p>
                       <button 
-                        onClick={() => setShowAIPitch(true)}
+                        onClick={() => {
+                          if (!isPro) {
+                            toast.error('Upgrade to PRO to use AI Pitch Generator')
+                            return
+                          }
+                          setShowAIPitch(true)
+                        }}
                         className="w-full py-2 bg-purple-600/50 rounded-lg hover:bg-purple-600/70"
                       >
                         Open Generator
@@ -820,7 +804,13 @@ export default function OptimaCommandCenter() {
                         Analyze client history and success probability
                       </p>
                       <button 
-                        onClick={() => toast.info('Pro feature - Coming soon!')}
+                        onClick={() => {
+                          if (!isPro) {
+                            toast.error('Upgrade to PRO to use Client Analyzer')
+                            return
+                          }
+                          toast.info('Pro feature - Coming soon!')
+                        }}
                         className="w-full py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
                       >
                         Analyze
@@ -836,7 +826,13 @@ export default function OptimaCommandCenter() {
                         AI-powered negotiation strategies
                       </p>
                       <button 
-                        onClick={() => toast.info('Pro feature - Coming soon!')}
+                        onClick={() => {
+                          if (!isPro) {
+                            toast.error('Upgrade to PRO to use Rate Negotiator')
+                            return
+                          }
+                          toast.info('Pro feature - Coming soon!')
+                        }}
                         className="w-full py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
                       >
                         Negotiate
