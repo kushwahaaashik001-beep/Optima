@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// ✅ Advanced Type Definitions matching your backend
+// ✅ Type Definitions
 export interface Lead {
   id: string;
   title: string;
@@ -32,25 +32,6 @@ export interface SystemLog {
   data?: any;
 }
 
-export interface SystemHealth {
-  id: string;
-  metric: string;
-  value: number;
-  unit: string;
-  status: 'healthy' | 'warning' | 'critical';
-  timestamp: string;
-}
-
-export interface ScraperConfig {
-  id: string;
-  key: string;
-  value: any;
-  category: 'quantum' | 'proxy' | 'ai' | 'database' | 'performance';
-  description: string;
-  last_updated: string;
-}
-
-// ✅ Quantum Engine States
 export interface EngineState {
   mode: 'vacuum' | 'targeted' | 'hybrid';
   active_threads: number;
@@ -61,10 +42,10 @@ export interface EngineState {
   last_health_check: string;
 }
 
-// ✅ Singleton instance
+// ✅ Singleton pattern
 let supabaseInstance: SupabaseClient | null = null;
 
-// ✅ Initialize Quantum Supabase Client
+// ✅ Initialize Supabase Client
 export const getSupabaseClient = (): SupabaseClient => {
   if (supabaseInstance) {
     return supabaseInstance;
@@ -73,30 +54,15 @@ export const getSupabaseClient = (): SupabaseClient => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-  // Quantum-grade initialization
   supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storageKey: 'quantum-auth',
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-    },
-    realtime: {
-      params: {
-        eventsPerSecond: 10,
-      },
+      detectSessionInUrl: false
     },
     global: {
-      headers: {
-        'X-Quantum-Client': 'Optima-Pro-Frontend',
-        'X-Client-Version': '2.0.0',
-      },
-      fetch: (...args) => fetch(...args),
-    },
-    db: {
-      schema: 'public',
-    },
+      fetch: (...args: Parameters<typeof fetch>) => fetch(...args)
+    }
   });
 
   return supabaseInstance;
@@ -109,7 +75,7 @@ export const subscribeToLeads = (
 ) => {
   const supabase = getSupabaseClient();
   
-  return supabase
+  const channel = supabase
     .channel('quantum-leads')
     .on(
       'postgres_changes',
@@ -118,26 +84,13 @@ export const subscribeToLeads = (
         schema: 'public',
         table: 'leads',
       },
-      (payload) => {
+      (payload: any) => {
         if (payload.new) {
           callback(payload.new as Lead);
         }
       }
     )
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'leads',
-      },
-      (payload) => {
-        if (payload.new) {
-          callback(payload.new as Lead);
-        }
-      }
-    )
-    .subscribe((status) => {
+    .subscribe((status: any) => {
       if (status === 'SUBSCRIBED') {
         console.log('🎯 Quantum lead subscription active');
       }
@@ -145,27 +98,8 @@ export const subscribeToLeads = (
         errorCallback?.(new Error('Subscription error'));
       }
     });
-};
 
-export const subscribeToLogs = (callback: (log: SystemLog) => void) => {
-  const supabase = getSupabaseClient();
-  
-  return supabase
-    .channel('quantum-logs')
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'system_logs',
-      },
-      (payload) => {
-        if (payload.new) {
-          callback(payload.new as SystemLog);
-        }
-      }
-    )
-    .subscribe();
+  return channel;
 };
 
 // ✅ Main client export
