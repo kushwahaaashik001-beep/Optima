@@ -228,17 +228,26 @@ export default function OptimaCommandCenter() {
 
   function setupRealtime() {
     const unsubscribe = leadMonitor.subscribe((newLead: Lead, isProLead: boolean) => {
+      // Store current leads in variable for closure
+      const currentLeads = leads;
+      
       // Free users get delayed leads (5-10 minutes)
       if (!isPro) {
         setTimeout(() => {
-          setLeads(prev => [newLead, ...prev.slice(0, 99)])
-          applyFilters([newLead, ...prev.slice(0, 99)])
+          setLeads(prev => {
+            const updatedLeads = [newLead, ...prev.slice(0, 99)]
+            applyFilters(updatedLeads)
+            return updatedLeads
+          })
         }, Math.random() * 300000 + 300000) // 5-10 minutes delay
       } else {
         // Pro users get instant leads (10 seconds)
         setTimeout(() => {
-          setLeads(prev => [newLead, ...prev.slice(0, 99)])
-          applyFilters([newLead, ...prev.slice(0, 99)])
+          setLeads(prev => {
+            const updatedLeads = [newLead, ...prev.slice(0, 99)]
+            applyFilters(updatedLeads)
+            return updatedLeads
+          })
           showProNotification(newLead)
         }, 10000) // 10 seconds
       }
@@ -345,7 +354,6 @@ export default function OptimaCommandCenter() {
     }
   }
 
-  // FIXED: Changed to accept string instead of specific union type
   const handleLeadStatusChange = async (leadId: string, status: string) => {
     try {
       const validStatus = status as 'new' | 'applied' | 'replied' | 'hired' | 'rejected'
@@ -704,7 +712,7 @@ export default function OptimaCommandCenter() {
                         )}
                       </div>
 
-                      {/* Status Tracker - FIXED: No TypeScript errors */}
+                      {/* Status Tracker */}
                       <div className="mt-4">
                         <LeadStatusTracker 
                           lead={lead}
