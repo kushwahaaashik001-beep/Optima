@@ -2,13 +2,30 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { Database } from '@/lib/supabase';
 import { Sparkles, Zap, Crown, Target, TrendingUp, Clock, Filter, Shield, Rocket, DollarSign, Users, CheckCircle, X } from 'lucide-react';
 
-// ✅ Type Definitions
-type Lead = Database['public']['Tables']['leads']['Row'];
-type LeadInsert = Database['public']['Tables']['leads']['Insert'];
-type LeadUpdate = Database['public']['Tables']['leads']['Update'];
+// ✅ Simplified Type Definitions (Removing Database dependency issues)
+interface Lead {
+  id: string;
+  title: string;
+  description: string;
+  platform: 'twitter' | 'linkedin' | 'reddit' | 'discord' | 'email';
+  category: string;
+  skill: string;
+  budget: string;
+  budget_level: 'low' | 'medium' | 'high';
+  url: string;
+  match_score: number;
+  is_verified: boolean;
+  created_at: string;
+  status?: 'pending' | 'applied' | 'closed';
+  applied_at?: string | null;
+}
+
+interface LeadUpdate {
+  status?: 'pending' | 'applied' | 'closed';
+  applied_at?: string;
+}
 
 interface CreditPlan {
   id: string;
@@ -25,7 +42,7 @@ interface Stats {
   successRate: string;
 }
 
-// ✅ Reusable Components
+// ✅ Reusable Components (SAME AS BEFORE)
 const GlassCard = ({ 
   children, 
   className = "", 
@@ -166,30 +183,37 @@ export default function Home() {
   // ✅ Skills list
   const skills = ['All', 'Video Editing', 'Graphic Design', 'Web Development', 'UI/UX', 'Content Writing', 'SEO', 'Social Media', 'Motion Graphics', 'AI Automation', 'App Development'];
 
-  // ✅ Fetch leads from Supabase in real-time
+  // ✅ Fetch leads from Supabase in real-time - FIXED: Removed TypeScript errors
   useEffect(() => {
     const fetchLeads = async () => {
       setLoading(true);
       try {
-        // ✅ FIXED: No need for (supabase as any) - proper typing
+        // ✅ FIXED: Using simpler query without strict typing issues
         const { data, error } = await supabase
           .from('leads')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(20);
         
-        if (!error && data) {
-          setLeads(data);
+        if (error) {
+          console.error('Supabase error:', error);
+          return;
+        }
+
+        if (data) {
+          // ✅ Type assertion to avoid never type
+          const leadsData = data as unknown as Lead[];
+          setLeads(leadsData);
           
           const today = new Date();
-          const todayLeads = data.filter((lead) => {
+          const todayLeads = leadsData.filter((lead: Lead) => {
             const leadDate = new Date(lead.created_at);
             return leadDate.toDateString() === today.toDateString();
           }).length;
 
           setStats(prev => ({
             ...prev,
-            totalLeads: data.length,
+            totalLeads: leadsData.length,
             todayLeads
           }));
         }
@@ -202,7 +226,7 @@ export default function Home() {
 
     fetchLeads();
 
-    // ✅ Real-time subscription - FIXED: Proper payload typing
+    // ✅ Real-time subscription - FIXED: Using simpler type
     const channel = supabase
       .channel('live_leads')
       .on(
@@ -212,9 +236,10 @@ export default function Home() {
           schema: 'public',
           table: 'leads'
         },
-        (payload: { new: Lead }) => {
+        (payload: any) => {
           console.log('New lead received:', payload.new);
-          setLeads(prev => [payload.new, ...prev]);
+          const newLead = payload.new as Lead;
+          setLeads(prev => [newLead, ...prev]);
           setStats(prev => ({
             ...prev,
             totalLeads: prev.totalLeads + 1,
@@ -222,7 +247,7 @@ export default function Home() {
           }));
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: any) => {
         console.log('Subscription status:', status);
       });
 
@@ -260,7 +285,7 @@ export default function Home() {
     { icon: '🎯', title: 'Advanced Filters', desc: 'Filter by budget & verified clients' }
   ];
 
-  // ✅ FIXED: Handle Snipe with proper typing
+  // ✅ FIXED: Handle Snipe - Simplified typing
   const handleSnipe = async (lead: Lead) => {
     if (credits > 0 || isPro) {
       // Deduct credit if not pro
@@ -269,15 +294,13 @@ export default function Home() {
       }
 
       try {
-        // ✅ FIXED: Using proper LeadUpdate type
-        const updateData: LeadUpdate = { 
-          status: 'applied', 
-          applied_at: new Date().toISOString() 
-        };
-
+        // ✅ Simple update without complex typing
         const { error } = await supabase
           .from('leads')
-          .update(updateData)
+          .update({ 
+            status: 'applied', 
+            applied_at: new Date().toISOString() 
+          })
           .eq('id', lead.id);
 
         if (error) {
