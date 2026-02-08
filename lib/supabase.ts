@@ -1,68 +1,28 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// ✅ Database Type Definition
-export interface Database {
-  public: {
-    Tables: {
-      leads: {
-        Row: {
-          id: string;
-          title: string;
-          description: string;
-          platform: 'twitter' | 'linkedin' | 'reddit' | 'discord' | 'email';
-          category: string;
-          skill: string;
-          budget: string;
-          budget_level: 'low' | 'medium' | 'high';
-          url: string;
-          match_score: number;
-          is_verified: boolean;
-          created_at: string;
-          status?: 'pending' | 'applied' | 'closed';
-          applied_at?: string;
-        };
-        Insert: {
-          id?: string;
-          title: string;
-          description: string;
-          platform: 'twitter' | 'linkedin' | 'reddit' | 'discord' | 'email';
-          category: string;
-          skill: string;
-          budget: string;
-          budget_level: 'low' | 'medium' | 'high';
-          url: string;
-          match_score?: number;
-          is_verified?: boolean;
-          created_at?: string;
-          status?: 'pending' | 'applied' | 'closed';
-          applied_at?: string;
-        };
-        Update: {
-          id?: string;
-          title?: string;
-          description?: string;
-          platform?: 'twitter' | 'linkedin' | 'reddit' | 'discord' | 'email';
-          category?: string;
-          skill?: string;
-          budget?: string;
-          budget_level?: 'low' | 'medium' | 'high';
-          url?: string;
-          match_score?: number;
-          is_verified?: boolean;
-          created_at?: string;
-          status?: 'pending' | 'applied' | 'closed';
-          applied_at?: string;
-        };
-      };
-    };
-  };
+// ✅ Simple Type Definition (No complex database types)
+export interface Lead {
+  id: string;
+  title: string;
+  description: string;
+  platform: 'twitter' | 'linkedin' | 'reddit' | 'discord' | 'email';
+  category: string;
+  skill: string;
+  budget: string;
+  budget_level: 'low' | 'medium' | 'high';
+  url: string;
+  match_score: number;
+  is_verified: boolean;
+  created_at: string;
+  status?: 'pending' | 'applied' | 'closed';
+  applied_at?: string | null;
 }
 
 // ✅ Singleton instance
-let supabaseInstance: SupabaseClient<Database> | null = null;
+let supabaseInstance: SupabaseClient | null = null;
 
 // ✅ Initialize Supabase Client
-export const getSupabaseClient = (): SupabaseClient<Database> => {
+export const getSupabaseClient = (): SupabaseClient => {
   if (supabaseInstance) {
     return supabaseInstance;
   }
@@ -75,15 +35,14 @@ export const getSupabaseClient = (): SupabaseClient<Database> => {
     console.warn('Supabase environment variables missing');
   }
 
-  // ✅ Fixed: Proper initialization with global fetch
-  supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  // ✅ Simple initialization without complex typing
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false
     },
     global: {
-      // ✅ Fixed: fetch function inside global object
       fetch: (...args) => fetch(...args)
     }
   });
