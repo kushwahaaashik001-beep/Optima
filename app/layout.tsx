@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import TopNav from '@/components/TopNav';
-import { UserProvider } from '@/context/UserContext';
-import LiveTicker from '@/components/LiveTicker';
+import TopNav from '../components/TopNav';
+import { UserProvider } from './context/UserContext';
+import LiveTicker from '../components/LiveTicker';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
