@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useUser, useCredits } from '@/context/UserContext';
-import { supabase } from '@/lib/supabase';
+import { useUser } from '../context/UserContext'; // @/ hata kar ../ kiya aur useCredits hata diya kyunki wo useUser mein hi hai
+import { supabase } from '../../lib/supabase'; // Agar lib folder root mein hai toh do baar ../ lagega
 import { toast } from 'react-hot-toast';
 
 export interface Lead {
