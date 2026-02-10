@@ -23,7 +23,7 @@
     "next": "14.0.4",
     "react": "^18",
     "react-dom": "^18",
-    "framer-motion": "^10.16.16",
+    "framer-motion": "^11,0,0",
     "lucide-react": "^0.309.0",
     "react-hot-toast": "^2.4.1",
     "@vercel/analytics": "^1.1.1",
