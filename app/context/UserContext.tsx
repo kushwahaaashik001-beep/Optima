@@ -1,720 +1,586 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 
-// Define all 20+ skills
-export const ALL_SKILLS = [
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
+
+// Subscription pricing configuration
+const SUBSCRIPTION_PRICES = {
+  firstTimePro: 199, // First time subscription
+  renewalPro: 599, // Renewal subscription
+} as const;
+
+// Available skills (20+ skills)
+export const AVAILABLE_SKILLS = [
   'React Developer',
-  'Next.js Developer',
   'Full Stack Developer',
   'Frontend Developer',
   'Backend Developer',
-  'Node.js Developer',
-  'Python Developer',
-  'Java Developer',
   'DevOps Engineer',
-  'UI/UX Designer',
-  'Mobile App Developer',
-  'Flutter Developer',
-  'React Native Developer',
-  'Machine Learning Engineer',
   'Data Scientist',
-  'Blockchain Developer',
-  'Web3 Developer',
-  'Cloud Architect',
-  'SEO Specialist',
-  'Digital Marketing',
-  'Content Writer',
-  'Graphic Designer',
-  'Video Editor',
-  'Social Media Manager',
-  'Sales Executive',
-  'Business Development',
+  'AI/ML Engineer',
+  'Mobile App Developer',
+  'UI/UX Designer',
   'Product Manager',
-  'Project Manager'
+  'Digital Marketer',
+  'Content Writer',
+  'SEO Specialist',
+  'Blockchain Developer',
+  'Cloud Architect',
+  'Cybersecurity Analyst',
+  'Game Developer',
+  'QA Engineer',
+  'Business Analyst',
+  'Sales Executive',
+  'Social Media Manager',
+  'E-commerce Specialist'
 ] as const;
 
-export type SkillType = typeof ALL_SKILLS[number];
+export type SkillType = typeof AVAILABLE_SKILLS[number];
 
-interface User {
+export interface UserProfile {
   id: string;
   email: string;
-  name: string;
-  avatar: string;
-  isPro: boolean;
-  isFirstTimePro: boolean;
+  full_name?: string;
+  avatar_url?: string;
   credits: number;
-  lastCreditReset: string;
-  selectedSkill: SkillType;
-  subscriptionId?: string;
-  paymentDate?: string;
+  is_pro: boolean;
+  is_first_time_pro: boolean;
+  last_credit_reset: string;
+  subscription_end_date?: string;
+  selected_skill: SkillType;
+  created_at: string;
+  updated_at: string;
 }
 
-interface Lead {
+export interface CreditTransaction {
   id: string;
-  company: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  skillRequired: SkillType;
-  location: string;
-  budget: string;
-  timestamp: Date;
-  status: 'pending' | 'contacted' | 'converted' | 'rejected';
-  pitch?: string;
+  user_id: string;
+  type: 'FREE_DAILY' | 'PRO_USAGE' | 'PURCHASE' | 'REFUND';
+  amount: number;
+  balance_after: number;
+  description: string;
+  created_at: string;
 }
 
 interface UserContextType {
-  user: User | null;
-  leads: Lead[];
+  // User state
+  user: UserProfile | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  
+  // Credits & Subscription
   credits: number;
-  selectedSkill: SkillType;
   isPro: boolean;
   isFirstTimePro: boolean;
-  isLoading: boolean;
-  isNotificationActive: boolean;
-  notificationMessage: string;
-  dashboardStats: {
-    totalLeads: number;
-    contactedLeads: number;
-    convertedLeads: number;
-    todayLeads: number;
-  };
+  subscriptionEndDate: string | null;
+  
+  // Skill management
+  selectedSkill: SkillType;
+  availableSkills: readonly SkillType[];
   
   // Actions
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  signup: (email: string, password: string, fullName: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (data: Partial<User>) => Promise<void>;
-  selectSkill: (skill: SkillType) => void;
-  useCredit: () => boolean;
+  updateProfile: (data: Partial<UserProfile>) => Promise<void>;
+  
+  // Credit management
+  deductCredit: (amount?: number) => Promise<void>;
+  resetDailyCredits: () => Promise<void>;
+  checkCreditReset: () => Promise<void>;
+  
+  // Subscription
   upgradeToPro: () => Promise<void>;
-  refreshCredits: () => Promise<void>;
-  addLead: (lead: Omit<Lead, 'id' | 'timestamp' | 'status'>) => void;
-  updateLeadStatus: (leadId: string, status: Lead['status'], pitch?: string) => void;
-  sendNotification: (message: string) => void;
-  clearNotification: () => void;
+  cancelProSubscription: () => Promise<void>;
+  getProPrice: () => number;
   
-  // Dashboard helpers
-  getFilteredLeads: () => Lead[];
-  getLeadStatsBySkill: (skill?: SkillType) => {
-    total: number;
-    contacted: number;
-    converted: number;
-    pending: number;
-  };
-  getDailyLeads: () => Lead[];
+  // Skill management
+  setSelectedSkill: (skill: SkillType) => Promise<void>;
   
-  // Payment
-  initiatePayment: (amount: number) => Promise<{ orderId: string; amount: number }>;
-  verifyPayment: (paymentId: string, orderId: string) => Promise<boolean>;
+  // Real-time
+  subscribeToUserUpdates: () => void;
+  unsubscribeFromUserUpdates: () => void;
 }
-
-const defaultUser: User = {
-  id: 'temp-id',
-  email: 'guest@example.com',
-  name: 'Guest User',
-  avatar: '/default-avatar.png',
-  isPro: false,
-  isFirstTimePro: true,
-  credits: 3,
-  lastCreditReset: new Date().toISOString(),
-  selectedSkill: 'React Developer'
-};
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isNotificationActive, setIsNotificationActive] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [dashboardStats, setDashboardStats] = useState({
-    totalLeads: 0,
-    contactedLeads: 0,
-    convertedLeads: 0,
-    todayLeads: 0
-  });
+  const [credits, setCredits] = useState(3); // Default 3 free credits
+  const [selectedSkill, setSelectedSkillState] = useState<SkillType>('React Developer');
+  const router = useRouter();
 
-  // Initialize with guest user
+  // Initialize user session
   useEffect(() => {
     const initializeUser = async () => {
       try {
-        // Check for stored user session
-        const storedUser = localStorage.getItem('leadfinder_user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          
-          // Check if credits need reset (daily reset)
-          await checkCreditReset(parsedUser);
-          
-          // Fetch user leads
-          await fetchUserLeads(parsedUser.id);
+        setIsLoading(true);
+        
+        // Check for existing session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          await fetchUserProfile(session.user.id);
         } else {
-          setUser(defaultUser);
-          // Fetch some sample leads for guest
-          fetchSampleLeads();
+          // For demo/development, create anonymous user
+          await createAnonymousUser();
         }
       } catch (error) {
-        console.error('Initialization error:', error);
-        setUser(defaultUser);
-        fetchSampleLeads();
+        console.error('Error initializing user:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeUser();
-  }, []);
 
-  // Check and reset credits daily
-  const checkCreditReset = async (currentUser: User) => {
-    const today = new Date().toDateString();
-    const lastReset = new Date(currentUser.lastCreditReset).toDateString();
-    
-    if (today !== lastReset && !currentUser.isPro) {
-      const updatedUser = {
-        ...currentUser,
-        credits: 3,
-        lastCreditReset: new Date().toISOString()
-      };
-      
-      setUser(updatedUser);
-      localStorage.setItem('leadfinder_user', JSON.stringify(updatedUser));
-      
-      // Update in Supabase if logged in
-      if (currentUser.id !== 'temp-id') {
-        await supabase
-          .from('users')
-          .update({ credits: 3, last_credit_reset: new Date().toISOString() })
-          .eq('id', currentUser.id);
+    // Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          await fetchUserProfile(session.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setCredits(3);
+        }
       }
-    }
-  };
-
-  // Fetch user leads from Supabase
-  const fetchUserLeads = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      if (data) {
-        const formattedLeads: Lead[] = data.map(lead => ({
-          id: lead.id,
-          company: lead.company,
-          contactPerson: lead.contact_person,
-          email: lead.email,
-          phone: lead.phone,
-          skillRequired: lead.skill_required,
-          location: lead.location,
-          budget: lead.budget,
-          timestamp: new Date(lead.created_at),
-          status: lead.status,
-          pitch: lead.pitch
-        }));
-        
-        setLeads(formattedLeads);
-        updateDashboardStats(formattedLeads);
-      }
-    } catch (error) {
-      console.error('Error fetching leads:', error);
-      // Fallback to sample leads
-      fetchSampleLeads();
-    }
-  };
-
-  // Sample leads for demonstration
-  const fetchSampleLeads = () => {
-    const sampleLeads: Lead[] = [
-      {
-        id: '1',
-        company: 'TechCorp Solutions',
-        contactPerson: 'John Smith',
-        email: 'john@techcorp.com',
-        phone: '+1-555-0123',
-        skillRequired: 'React Developer',
-        location: 'New York, USA',
-        budget: '$80k - $100k',
-        timestamp: new Date(),
-        status: 'pending'
-      },
-      {
-        id: '2',
-        company: 'Digital Innovations',
-        contactPerson: 'Sarah Johnson',
-        email: 'sarah@digitalinnovations.com',
-        phone: '+1-555-0124',
-        skillRequired: 'Next.js Developer',
-        location: 'San Francisco, USA',
-        budget: '$90k - $120k',
-        timestamp: new Date(Date.now() - 86400000), // Yesterday
-        status: 'contacted'
-      },
-      {
-        id: '3',
-        company: 'StartupXYZ',
-        contactPerson: 'Mike Chen',
-        email: 'mike@startupxyz.com',
-        phone: '+1-555-0125',
-        skillRequired: 'Full Stack Developer',
-        location: 'Remote',
-        budget: '$70k - $95k',
-        timestamp: new Date(Date.now() - 172800000), // 2 days ago
-        status: 'converted'
-      }
-    ];
-    
-    setLeads(sampleLeads);
-    updateDashboardStats(sampleLeads);
-  };
-
-  // Update dashboard statistics
-  const updateDashboardStats = (leadList: Lead[]) => {
-    const today = new Date().toDateString();
-    const todayLeads = leadList.filter(lead => 
-      new Date(lead.timestamp).toDateString() === today
     );
 
-    setDashboardStats({
-      totalLeads: leadList.length,
-      contactedLeads: leadList.filter(lead => lead.status === 'contacted').length,
-      convertedLeads: leadList.filter(lead => lead.status === 'converted').length,
-      todayLeads: todayLeads.length
-    });
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Fetch user profile from Supabase
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      // Fetch user profile
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (profile) {
+        setUser(profile);
+        setCredits(profile.credits);
+        setSelectedSkillState(profile.selected_skill || 'React Developer');
+        
+        // Check if daily credits need reset
+        await checkCreditReset();
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    }
   };
 
-  // Authentication
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
+  // Create anonymous user for demo
+  const createAnonymousUser = async () => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Generate anonymous user ID
+      const anonymousId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      const newUser: UserProfile = {
+        id: anonymousId,
+        email: `${anonymousId}@anonymous.com`,
+        credits: 3,
+        is_pro: false,
+        is_first_time_pro: true,
+        last_credit_reset: new Date().toISOString(),
+        selected_skill: 'React Developer',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      setUser(newUser);
+      setCredits(3);
+    } catch (error) {
+      console.error('Error creating anonymous user:', error);
+    }
+  };
+
+  // Login function
+  const login = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
 
       if (error) throw error;
 
-      if (data.user) {
-        // Fetch user profile
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profile) {
-          const userData: User = {
-            id: profile.id,
-            email: profile.email,
-            name: profile.name,
-            avatar: profile.avatar || '/default-avatar.png',
-            isPro: profile.is_pro,
-            isFirstTimePro: profile.is_first_time_pro,
-            credits: profile.credits,
-            lastCreditReset: profile.last_credit_reset,
-            selectedSkill: profile.selected_skill || 'React Developer',
-            subscriptionId: profile.subscription_id,
-            paymentDate: profile.payment_date
-          };
-
-          setUser(userData);
-          localStorage.setItem('leadfinder_user', JSON.stringify(userData));
-          await fetchUserLeads(userData.id);
-          
-          sendNotification('Welcome back! You are now logged in.');
-        }
-      }
+      router.push('/dashboard');
     } catch (error: any) {
-      console.error('Login error:', error);
-      throw new Error(error.message || 'Login failed');
-    } finally {
-      setIsLoading(false);
+      console.error('Login error:', error.message);
+      throw error;
     }
   };
 
-  const signup = async (email: string, password: string, name: string) => {
-    setIsLoading(true);
+  // Signup function
+  const signup = async (email: string, password: string, fullName: string) => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { name }
-        }
+          data: {
+            full_name: fullName,
+          },
+        },
       });
 
       if (error) throw error;
 
+      // Create user profile in profiles table
       if (data.user) {
-        // Create user profile
+        const newProfile = {
+          id: data.user.id,
+          email: data.user.email!,
+          full_name: fullName,
+          credits: 3,
+          is_pro: false,
+          is_first_time_pro: true,
+          last_credit_reset: new Date().toISOString(),
+          selected_skill: 'React Developer',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
         const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: data.user.id,
-            email,
-            name,
-            credits: 3,
-            is_pro: false,
-            is_first_time_pro: true,
-            selected_skill: 'React Developer',
-            last_credit_reset: new Date().toISOString()
-          });
+          .from('profiles')
+          .insert([newProfile]);
 
         if (profileError) throw profileError;
 
-        const newUser: User = {
-          id: data.user.id,
-          email,
-          name,
-          avatar: '/default-avatar.png',
-          isPro: false,
-          isFirstTimePro: true,
-          credits: 3,
-          lastCreditReset: new Date().toISOString(),
-          selectedSkill: 'React Developer'
-        };
-
-        setUser(newUser);
-        localStorage.setItem('leadfinder_user', JSON.stringify(newUser));
-        
-        sendNotification('Account created successfully! Enjoy 3 free daily credits.');
+        setUser(newProfile);
       }
+
+      router.push('/dashboard');
     } catch (error: any) {
-      console.error('Signup error:', error);
-      throw new Error(error.message || 'Signup failed');
-    } finally {
-      setIsLoading(false);
+      console.error('Signup error:', error.message);
+      throw error;
     }
   };
 
+  // Logout function
   const logout = async () => {
     try {
       await supabase.auth.signOut();
-      setUser(defaultUser);
-      localStorage.removeItem('leadfinder_user');
-      fetchSampleLeads();
-      sendNotification('Logged out successfully.');
-    } catch (error) {
-      console.error('Logout error:', error);
+      setUser(null);
+      setCredits(3);
+      router.push('/');
+    } catch (error: any) {
+      console.error('Logout error:', error.message);
+      throw error;
     }
   };
 
-  // User actions
-  const selectSkill = (skill: SkillType) => {
-    if (user) {
-      const updatedUser = { ...user, selectedSkill: skill };
-      setUser(updatedUser);
+  // Update user profile
+  const updateProfile = async (data: Partial<UserProfile>) => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      const updatedData = {
+        ...data,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updatedData)
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setUser(prev => prev ? { ...prev, ...updatedData } : null);
       
-      if (user.id !== 'temp-id') {
-        // Update in database
-        supabase
-          .from('users')
-          .update({ selected_skill: skill })
-          .eq('id', user.id);
+      // Update credits if changed
+      if (data.credits !== undefined) {
+        setCredits(data.credits);
       }
-      
-      localStorage.setItem('leadfinder_user', JSON.stringify(updatedUser));
+    } catch (error: any) {
+      console.error('Update profile error:', error.message);
+      throw error;
     }
   };
 
-  const useCredit = (): boolean => {
-    if (!user) return false;
-    
-    if (user.isPro) {
-      // Pro users have unlimited credits
-      return true;
-    }
-    
-    if (user.credits > 0) {
-      const updatedCredits = user.credits - 1;
-      const updatedUser = { ...user, credits: updatedCredits };
-      
-      setUser(updatedUser);
-      localStorage.setItem('leadfinder_user', JSON.stringify(updatedUser));
-      
-      // Update in database
-      if (user.id !== 'temp-id') {
-        supabase
-          .from('users')
-          .update({ credits: updatedCredits })
-          .eq('id', user.id);
-      }
-      
-      sendNotification(`Credit used. ${updatedCredits} credits remaining.`);
-      return true;
-    }
-    
-    sendNotification('No credits remaining. Upgrade to Pro for unlimited leads.');
-    return false;
-  };
+  // Deduct credit from user
+  const deductCredit = async (amount: number = 1) => {
+    if (!user) throw new Error('No user logged in');
 
-  const upgradeToPro = async () => {
-    if (!user) return;
+    const newCredits = Math.max(0, credits - amount);
     
     try {
-      // Determine price
-      const price = user.isFirstTimePro ? 199 : 599;
+      // Update credits in database
+      await updateProfile({ credits: newCredits });
       
-      // Here you would integrate with payment gateway (Razorpay, Stripe, etc.)
-      // For now, simulate payment
-      const paymentSuccessful = await initiatePayment(price);
-      
-      if (paymentSuccessful) {
-        const updatedUser = {
-          ...user,
-          isPro: true,
-          isFirstTimePro: false,
-          credits: 999, // Unlimited for UI display
-          paymentDate: new Date().toISOString()
-        };
-        
-        setUser(updatedUser);
-        localStorage.setItem('leadfinder_user', JSON.stringify(updatedUser));
-        
-        // Update in database
-        if (user.id !== 'temp-id') {
-          await supabase
-            .from('users')
-            .update({
-              is_pro: true,
-              is_first_time_pro: false,
-              credits: 999,
-              payment_date: new Date().toISOString()
-            })
-            .eq('id', user.id);
-        }
-        
-        sendNotification('🎉 Welcome to Pro! Enjoy unlimited leads and AI pitches.');
-      }
+      // Log credit transaction
+      await logCreditTransaction({
+        user_id: user.id,
+        type: user.is_pro ? 'PRO_USAGE' : 'FREE_DAILY',
+        amount: -amount,
+        balance_after: newCredits,
+        description: `Credit used for lead generation - Skill: ${selectedSkill}`,
+      });
+
+      setCredits(newCredits);
     } catch (error) {
-      console.error('Upgrade error:', error);
-      sendNotification('Upgrade failed. Please try again.');
+      console.error('Error deducting credit:', error);
+      throw error;
     }
   };
 
-  const refreshCredits = async () => {
-    if (!user || user.isPro) return;
-    
-    const updatedUser = {
-      ...user,
-      credits: 3,
-      lastCreditReset: new Date().toISOString()
-    };
-    
-    setUser(updatedUser);
-    localStorage.setItem('leadfinder_user', JSON.stringify(updatedUser));
-    
-    if (user.id !== 'temp-id') {
-      await supabase
-        .from('users')
-        .update({
+  // Log credit transaction
+  const logCreditTransaction = async (transaction: Omit<CreditTransaction, 'id' | 'created_at'>) => {
+    try {
+      const { error } = await supabase
+        .from('credit_transactions')
+        .insert([{
+          ...transaction,
+          created_at: new Date().toISOString(),
+        }]);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error logging transaction:', error);
+    }
+  };
+
+  // Reset daily credits for free users
+  const resetDailyCredits = async () => {
+    if (!user || user.is_pro) return;
+
+    const now = new Date();
+    const lastReset = new Date(user.last_credit_reset);
+    const isNewDay = now.toDateString() !== lastReset.toDateString();
+
+    if (isNewDay) {
+      try {
+        await updateProfile({
           credits: 3,
-          last_credit_reset: new Date().toISOString()
-        })
-        .eq('id', user.id);
-    }
-    
-    sendNotification('Daily credits refreshed! You have 3 new credits.');
-  };
-
-  // Lead management
-  const addLead = (lead: Omit<Lead, 'id' | 'timestamp' | 'status'>) => {
-    const newLead: Lead = {
-      ...lead,
-      id: Date.now().toString(),
-      timestamp: new Date(),
-      status: 'pending'
-    };
-    
-    setLeads(prev => [newLead, ...prev]);
-    updateDashboardStats([newLead, ...leads]);
-    
-    // Save to database if logged in
-    if (user && user.id !== 'temp-id') {
-      supabase
-        .from('leads')
-        .insert({
+          last_credit_reset: now.toISOString(),
+        });
+        
+        setCredits(3);
+        
+        // Log free credit reset
+        await logCreditTransaction({
           user_id: user.id,
-          company: lead.company,
-          contact_person: lead.contactPerson,
-          email: lead.email,
-          phone: lead.phone,
-          skill_required: lead.skillRequired,
-          location: lead.location,
-          budget: lead.budget,
-          status: 'pending'
+          type: 'FREE_DAILY',
+          amount: 3,
+          balance_after: 3,
+          description: 'Daily free credits reset',
         });
-    }
-    
-    // Send notification (Pro users get faster notifications)
-    const notificationDelay = user?.isPro ? 5000 : 15000; // 5s for Pro, 15s for free
-    setTimeout(() => {
-      sendNotification(`New lead found: ${lead.company} needs a ${lead.skillRequired}`);
-    }, notificationDelay);
-  };
-
-  const updateLeadStatus = (leadId: string, status: Lead['status'], pitch?: string) => {
-    setLeads(prev =>
-      prev.map(lead =>
-        lead.id === leadId
-          ? { ...lead, status, pitch: pitch || lead.pitch }
-          : lead
-      )
-    );
-    
-    // Update in database if logged in
-    if (user && user.id !== 'temp-id') {
-      supabase
-        .from('leads')
-        .update({ status, pitch })
-        .eq('id', leadId);
+      } catch (error) {
+        console.error('Error resetting credits:', error);
+      }
     }
   };
 
-  // Dashboard helpers
-  const getFilteredLeads = useCallback((): Lead[] => {
-    return leads.filter(lead => lead.skillRequired === user?.selectedSkill);
-  }, [leads, user?.selectedSkill]);
+  // Check and reset credits if needed
+  const checkCreditReset = async () => {
+    if (!user || user.is_pro) return;
 
-  const getLeadStatsBySkill = useCallback((skill?: SkillType) => {
-    const targetSkill = skill || user?.selectedSkill;
-    const filteredLeads = leads.filter(lead => lead.skillRequired === targetSkill);
+    await resetDailyCredits();
+  };
+
+  // Upgrade to Pro subscription
+  const upgradeToPro = async () => {
+    if (!user) throw new Error('No user logged in');
+
+    const price = getProPrice();
+    const subscriptionEnd = new Date();
+    subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1); // 1 month subscription
+
+    try {
+      // In production, integrate with payment gateway (Razorpay/Stripe)
+      console.log(`Processing payment of ₹${price} for Pro subscription`);
+      
+      // Update user profile
+      await updateProfile({
+        is_pro: true,
+        is_first_time_pro: false,
+        subscription_end_date: subscriptionEnd.toISOString(),
+        credits: user.credits + 50, // Add bonus credits
+      });
+
+      // Log transaction
+      await logCreditTransaction({
+        user_id: user.id,
+        type: 'PURCHASE',
+        amount: 50,
+        balance_after: user.credits + 50,
+        description: `Upgraded to Pro subscription - ₹${price}`,
+      });
+
+      // Send notification
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification('🎉 Welcome to Pro!', {
+            body: 'You now have access to premium features including AI Pitch and real-time notifications!',
+            icon: '/icon.png',
+          });
+        }
+      }
+
+      router.push('/dashboard');
+    } catch (error: any) {
+      console.error('Upgrade error:', error.message);
+      throw error;
+    }
+  };
+
+  // Cancel Pro subscription
+  const cancelProSubscription = async () => {
+    if (!user) throw new Error('No user logged in');
+
+    try {
+      await updateProfile({
+        is_pro: false,
+        subscription_end_date: null,
+      });
+
+      // Send notification
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification('Subscription Cancelled', {
+            body: 'Your Pro subscription has been cancelled. You will revert to free tier at the end of your billing period.',
+            icon: '/icon.png',
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('Cancel subscription error:', error.message);
+      throw error;
+    }
+  };
+
+  // Get current Pro price
+  const getProPrice = () => {
+    if (!user) return SUBSCRIPTION_PRICES.firstTimePro;
     
-    return {
-      total: filteredLeads.length,
-      contacted: filteredLeads.filter(lead => lead.status === 'contacted').length,
-      converted: filteredLeads.filter(lead => lead.status === 'converted').length,
-      pending: filteredLeads.filter(lead => lead.status === 'pending').length
-    };
-  }, [leads, user?.selectedSkill]);
+    return user.is_first_time_pro 
+      ? SUBSCRIPTION_PRICES.firstTimePro 
+      : SUBSCRIPTION_PRICES.renewalPro;
+  };
 
-  const getDailyLeads = useCallback((): Lead[] => {
-    const today = new Date().toDateString();
-    return leads.filter(lead => 
-      new Date(lead.timestamp).toDateString() === today
-    );
-  }, [leads]);
-
-  // Notifications
-  const sendNotification = (message: string) => {
-    setNotificationMessage(message);
-    setIsNotificationActive(true);
+  // Set selected skill
+  const setSelectedSkill = async (skill: SkillType) => {
+    setSelectedSkillState(skill);
     
-    // Auto-hide notification after 5 seconds
-    setTimeout(() => {
-      setIsNotificationActive(false);
-    }, 5000);
+    if (user) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ 
+            selected_skill: skill,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+      } catch (error) {
+        console.error('Error updating skill:', error);
+      }
+    }
   };
 
-  const clearNotification = () => {
-    setIsNotificationActive(false);
-  };
-
-  // Payment (mock implementation - integrate with actual payment gateway)
-  const initiatePayment = async (amount: number): Promise<any> => {
-    // Simulate payment process
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          orderId: `order_${Date.now()}`,
-          amount,
-          status: 'success'
-        });
-      }, 2000);
-    });
-  };
-
-  const verifyPayment = async (paymentId: string, orderId: string): Promise<boolean> => {
-    // Verify payment with payment gateway
-    return true; // Mock successful verification
-  };
-
-  // Update profile
-  const updateProfile = async (data: Partial<User>) => {
+  // Subscribe to real-time user updates
+  const subscribeToUserUpdates = () => {
     if (!user) return;
-    
-    const updatedUser = { ...user, ...data };
-    setUser(updatedUser);
-    localStorage.setItem('leadfinder_user', JSON.stringify(updatedUser));
-    
-    if (user.id !== 'temp-id') {
-      await supabase
-        .from('users')
-        .update({
-          name: data.name,
-          avatar: data.avatar
-        })
-        .eq('id', user.id);
-    }
-    
-    sendNotification('Profile updated successfully.');
+
+    const channel = supabase
+      .channel('user-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          const updatedUser = payload.new as UserProfile;
+          setUser(updatedUser);
+          setCredits(updatedUser.credits);
+          
+          // Send notification for important updates
+          if (updatedUser.is_pro && !user.is_pro) {
+            if (typeof window !== 'undefined' && 'Notification' in window) {
+              if (Notification.permission === 'granted') {
+                new Notification('Pro Activated! 🚀', {
+                  body: 'Your Pro subscription is now active!',
+                  icon: '/icon.png',
+                });
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return channel;
   };
+
+  // Unsubscribe from updates
+  const unsubscribeFromUserUpdates = () => {
+    supabase.removeChannel('user-updates');
+  };
+
+  // Request notification permission
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
 
   const value: UserContextType = {
+    // User state
     user,
-    leads,
-    credits: user?.credits || 0,
-    selectedSkill: user?.selectedSkill || 'React Developer',
-    isPro: user?.isPro || false,
-    isFirstTimePro: user?.isFirstTimePro || true,
     isLoading,
-    isNotificationActive,
-    notificationMessage,
-    dashboardStats,
+    isAuthenticated: !!user,
+    
+    // Credits & Subscription
+    credits,
+    isPro: user?.is_pro || false,
+    isFirstTimePro: user?.is_first_time_pro || true,
+    subscriptionEndDate: user?.subscription_end_date || null,
+    
+    // Skill management
+    selectedSkill,
+    availableSkills: AVAILABLE_SKILLS,
     
     // Actions
     login,
     signup,
     logout,
     updateProfile,
-    selectSkill,
-    useCredit,
+    
+    // Credit management
+    deductCredit,
+    resetDailyCredits,
+    checkCreditReset,
+    
+    // Subscription
     upgradeToPro,
-    refreshCredits,
-    addLead,
-    updateLeadStatus,
-    sendNotification,
-    clearNotification,
+    cancelProSubscription,
+    getProPrice,
     
-    // Dashboard helpers
-    getFilteredLeads,
-    getLeadStatsBySkill,
-    getDailyLeads,
+    // Skill management
+    setSelectedSkill,
     
-    // Payment
-    initiatePayment,
-    verifyPayment
+    // Real-time
+    subscribeToUserUpdates,
+    unsubscribeFromUserUpdates,
   };
 
   return (
     <UserContext.Provider value={value}>
-      {/* Notification Toast */}
-      {isNotificationActive && (
-        <div className="fixed top-20 right-4 z-50 animate-slide-in">
-          <div className={`p-4 rounded-lg shadow-lg ${
-            notificationMessage.includes('Welcome') || notificationMessage.includes('Pro')
-              ? 'bg-gradient-to-r from-green-500 to-emerald-600'
-              : 'bg-gradient-to-r from-blue-500 to-purple-600'
-          } text-white max-w-sm`}>
-            <div className="flex items-center justify-between">
-              <p className="font-medium">{notificationMessage}</p>
-              <button
-                onClick={clearNotification}
-                className="ml-4 text-white hover:text-gray-200"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {children}
     </UserContext.Provider>
   );
@@ -728,38 +594,50 @@ export function useUser() {
   return context;
 }
 
-// Utility function to get skill icon
-export const getSkillIcon = (skill: SkillType): string => {
-  const icons: Record<string, string> = {
-    'React Developer': '⚛️',
-    'Next.js Developer': '▲',
-    'Full Stack Developer': '💻',
-    'Frontend Developer': '🎨',
-    'Backend Developer': '⚙️',
-    'Node.js Developer': '🟢',
-    'Python Developer': '🐍',
-    'Java Developer': '☕',
-    'DevOps Engineer': '🔧',
-    'UI/UX Designer': '🎯',
-    'Mobile App Developer': '📱',
-    'Flutter Developer': '📱',
-    'React Native Developer': '⚛️📱',
-    'Machine Learning Engineer': '🤖',
-    'Data Scientist': '📊',
-    'Blockchain Developer': '⛓️',
-    'Web3 Developer': '🌐',
-    'Cloud Architect': '☁️',
-    'SEO Specialist': '🔍',
-    'Digital Marketing': '📈',
-    'Content Writer': '✍️',
-    'Graphic Designer': '🎨',
-    'Video Editor': '🎬',
-    'Social Media Manager': '📱',
-    'Sales Executive': '💰',
-    'Business Development': '📈',
-    'Product Manager': '📋',
-    'Project Manager': '📅'
-  };
+// Custom hook for credit management
+export function useCredits() {
+  const { credits, deductCredit, user } = useUser();
   
-  return icons[skill] || '💼';
-};
+  const canUseCredits = (amount: number = 1) => {
+    if (!user) return false;
+    if (user.is_pro) return true; // Pro users have unlimited access
+    return credits >= amount;
+  };
+
+  const useCredits = async (amount: number = 1) => {
+    if (!canUseCredits(amount)) {
+      throw new Error('Insufficient credits');
+    }
+    
+    if (!user?.is_pro) {
+      await deductCredit(amount);
+    }
+    
+    return true;
+  };
+
+  return {
+    credits,
+    canUseCredits,
+    useCredits,
+    isPro: user?.is_pro || false,
+  };
+}
+
+// Custom hook for subscription
+export function useSubscription() {
+  const { isPro, isFirstTimePro, upgradeToPro, cancelProSubscription, getProPrice, subscriptionEndDate } = useUser();
+  
+  const proPrice = getProPrice();
+  const isRenewal = !isFirstTimePro;
+  
+  return {
+    isPro,
+    isFirstTimePro,
+    proPrice,
+    isRenewal,
+    subscriptionEndDate,
+    upgradeToPro,
+    cancelProSubscription,
+  };
+}
