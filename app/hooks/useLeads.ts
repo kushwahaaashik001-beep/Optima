@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '../context/UserContext'; // @/ hata kar ../ kiya aur useCredits hata diya kyunki wo useUser mein hi hai
-import { supabase } from '../../lib/supabase'; // Agar lib folder root mein hai toh do baar ../ lagega
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useUser, useCredits } from '@/app/context/UserContext';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 
 export interface Lead {
@@ -27,6 +27,7 @@ export interface Lead {
   match_score: number;
   ai_pitch_generated: boolean;
   status: 'new' | 'contacted' | 'interview' | 'rejected' | 'accepted';
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -43,22 +44,29 @@ interface UseLeadsReturn {
   fetchLeads: (refresh?: boolean) => Promise<void>;
   fetchMoreLeads: () => Promise<void>;
   markAsContacted: (leadId: string) => Promise<void>;
+  markAsInterview: (leadId: string) => Promise<void>;
+  markAsRejected: (leadId: string) => Promise<void>;
+  markAsAccepted: (leadId: string) => Promise<void>;
+  addNoteToLead: (leadId: string, note: string) => Promise<void>;
   generateAIPitch: (leadId: string) => Promise<string>;
-  refetchRealTime: () => void;
+  refetchRealTime: () => Promise<void>;
+  clearFilters: () => void;
 }
 
-interface LeadFilters {
+export interface LeadFilters {
   minSalary?: number;
   location?: string;
   experience?: string;
-  datePosted?: '24h' | '7d' | '30d';
+  datePosted?: '24h' | '7d' | '30d' | 'all';
   remoteOnly?: boolean;
   verifiedOnly?: boolean;
+  status?: Lead['status'];
+  minMatchScore?: number;
 }
 
 export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
-  const { selectedSkill, user, isPro } = useUser();
-  const { useCredits: deductCredit, canUseCredits } = useCredits();
+  const { selectedSkill, user, isPro, sendNotification } = useUser();
+  const { canUseCredits, useCredits: deductCredits } = useCredits();
   
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
@@ -69,17 +77,109 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
   const [hasMore, setHasMore] = useState(true);
   const [newLeadsCount, setNewLeadsCount] = useState(0);
   const [realTimeSubscription, setRealTimeSubscription] = useState<any>(null);
+  const [activeFilters, setActiveFilters] = useState<LeadFilters>(filters || {});
 
   const PAGE_SIZE = 20;
 
+  // Apply filters when leads or filters change
+  useEffect(() => {
+    if (leads.length === 0) {
+      setFilteredLeads([]);
+      return;
+    }
+
+    let filtered = [...leads];
+    
+    // Apply filters
+    if (activeFilters.minSalary) {
+      filtered = filtered.filter(lead => 
+        lead.salary_min && lead.salary_min >= activeFilters.minSalary!
+      );
+    }
+    
+    if (activeFilters.location) {
+      filtered = filtered.filter(lead => 
+        lead.location.toLowerCase().includes(activeFilters.location!.toLowerCase())
+      );
+    }
+    
+    if (activeFilters.experience) {
+      filtered = filtered.filter(lead => {
+        const desc = (lead.description + ' ' + lead.requirements.join(' ')).toLowerCase();
+        return desc.includes(activeFilters.experience!.toLowerCase());
+      });
+    }
+    
+    if (activeFilters.datePosted && activeFilters.datePosted !== 'all') {
+      const now = new Date();
+      let dateThreshold = new Date();
+      
+      switch (activeFilters.datePosted) {
+        case '24h':
+          dateThreshold.setDate(now.getDate() - 1);
+          break;
+        case '7d':
+          dateThreshold.setDate(now.getDate() - 7);
+          break;
+        case '30d':
+          dateThreshold.setDate(now.getDate() - 30);
+          break;
+      }
+      
+      filtered = filtered.filter(lead => 
+        new Date(lead.posted_date) >= dateThreshold
+      );
+    }
+    
+    if (activeFilters.remoteOnly) {
+      filtered = filtered.filter(lead => 
+        lead.location.toLowerCase().includes('remote') || 
+        lead.location.toLowerCase().includes('work from home') ||
+        lead.location.toLowerCase().includes('wfh')
+      );
+    }
+    
+    if (activeFilters.verifiedOnly) {
+      filtered = filtered.filter(lead => lead.is_verified);
+    }
+    
+    if (activeFilters.status) {
+      filtered = filtered.filter(lead => lead.status === activeFilters.status);
+    }
+    
+    if (activeFilters.minMatchScore) {
+      filtered = filtered.filter(lead => 
+        lead.match_score >= activeFilters.minMatchScore!
+      );
+    }
+    
+    // Sort by match score (highest first), then by date (newest first)
+    filtered.sort((a, b) => {
+      if (b.match_score !== a.match_score) {
+        return b.match_score - a.match_score;
+      }
+      return new Date(b.posted_date).getTime() - new Date(a.posted_date).getTime();
+    });
+    
+    setFilteredLeads(filtered);
+  }, [leads, activeFilters]);
+
   // Fetch leads function
   const fetchLeads = useCallback(async (refresh = false) => {
-    if (!selectedSkill || !user) return;
+    if (!selectedSkill || !user) {
+      setIsLoading(false);
+      return;
+    }
     
     // Check credits for free users
-    if (!isPro && !canUseCredits(1)) {
-      toast.error('Insufficient credits! Upgrade to Pro or wait for daily reset.');
-      return;
+    if (!isPro) {
+      const hasCredits = canUseCredits(1);
+      if (!hasCredits) {
+        toast.error('Insufficient credits! Upgrade to Pro or wait for daily reset.');
+        setError('Insufficient credits');
+        setIsLoading(false);
+        return;
+      }
     }
 
     try {
@@ -88,7 +188,13 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
       
       // Deduct credit for free users
       if (!isPro) {
-        await deductCredit(1);
+        try {
+          await deductCredits(1);
+        } catch (creditError: any) {
+          toast.error(creditError.message || 'Failed to use credits');
+          setIsLoading(false);
+          return;
+        }
       }
 
       const currentPage = refresh ? 1 : page;
@@ -98,48 +204,40 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
         .from('leads')
         .select('*', { count: 'exact' })
         .eq('skill', selectedSkill)
+        .eq('user_id', user.id)
         .order('posted_date', { ascending: false })
         .range((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE - 1);
 
-      // Apply filters
-      if (filters?.minSalary) {
-        query = query.gte('salary_min', filters.minSalary);
+      // Apply basic filters that can be done server-side
+      if (activeFilters.minSalary) {
+        query = query.gte('salary_min', activeFilters.minSalary);
       }
       
-      if (filters?.location) {
-        query = query.ilike('location', `%${filters.location}%`);
+      if (activeFilters.location) {
+        query = query.ilike('location', `%${activeFilters.location}%`);
       }
       
-      if (filters?.remoteOnly) {
-        query = query.or('location.ilike.%remote%,location.ilike.%work from home%');
+      if (activeFilters.remoteOnly) {
+        query = query.or('location.ilike.%remote%,location.ilike.%work from home%,location.ilike.%wfh%');
       }
       
-      if (filters?.verifiedOnly) {
+      if (activeFilters.verifiedOnly) {
         query = query.eq('is_verified', true);
       }
       
-      if (filters?.datePosted) {
-        const now = new Date();
-        let dateThreshold = new Date();
-        
-        switch (filters.datePosted) {
-          case '24h':
-            dateThreshold.setDate(now.getDate() - 1);
-            break;
-          case '7d':
-            dateThreshold.setDate(now.getDate() - 7);
-            break;
-          case '30d':
-            dateThreshold.setDate(now.getDate() - 30);
-            break;
-        }
-        
-        query = query.gte('posted_date', dateThreshold.toISOString());
+      if (activeFilters.status) {
+        query = query.eq('status', activeFilters.status);
+      }
+      
+      if (activeFilters.minMatchScore) {
+        query = query.gte('match_score', activeFilters.minMatchScore);
       }
 
       const { data, error: fetchError, count } = await query;
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        throw fetchError;
+      }
 
       // Calculate new leads count (posted within last hour)
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -160,17 +258,16 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
       setHasMore((data?.length || 0) === PAGE_SIZE);
 
       // Trigger notification for new leads (Pro users only)
-      if (isPro && newLeads > 0 && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification(`🎯 ${newLeads} New ${selectedSkill} Leads`, {
-          body: `Found ${newLeads} new opportunities in the last hour!`,
-          icon: '/icon.png',
-          tag: 'new-leads'
-        });
+      if (isPro && newLeads > 0) {
+        sendNotification(
+          `🎯 ${newLeads} New ${selectedSkill} Leads`, 
+          `Found ${newLeads} new opportunities in the last hour!`
+        );
       }
 
       // Store in localStorage for offline access
       if (data) {
-        localStorage.setItem(`leads-${selectedSkill}`, JSON.stringify({
+        localStorage.setItem(`leads-${selectedSkill}-${user.id}`, JSON.stringify({
           data,
           timestamp: Date.now()
         }));
@@ -181,25 +278,32 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
       setError(err.message);
       
       // Try to load from localStorage on error
-      const cached = localStorage.getItem(`leads-${selectedSkill}`);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 24 * 60 * 60 * 1000) { // 24 hours
-          setLeads(data);
-          toast('Loaded cached leads', { icon: '📦' });
+      try {
+        const cached = localStorage.getItem(`leads-${selectedSkill}-${user.id}`);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 24 * 60 * 60 * 1000) { // 24 hours
+            setLeads(data);
+            toast('Loaded cached leads', { icon: '📦' });
+          }
         }
+      } catch (cacheError) {
+        console.error('Cache load error:', cacheError);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [selectedSkill, user, isPro, page, filters, deductCredit, canUseCredits]);
+  }, [selectedSkill, user, isPro, page, activeFilters, canUseCredits, deductCredits, sendNotification]);
 
   // Fetch more leads (pagination)
-  const fetchMoreLeads = async () => {
+  const fetchMoreLeads = useCallback(async () => {
     if (isLoading || !hasMore) return;
+    
     setPage(prev => prev + 1);
+    // Don't call fetchLeads here - the useEffect will handle it
+    // Instead, we'll trigger a fetch with the new page
     await fetchLeads();
-  };
+  }, [isLoading, hasMore, fetchLeads]);
 
   // Real-time subscription for new leads (Pro users only)
   useEffect(() => {
@@ -212,7 +316,7 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
       }
 
       const channel = supabase
-        .channel('leads-realtime')
+        .channel(`leads-realtime-${user.id}-${selectedSkill}`)
         .on(
           'postgres_changes',
           {
@@ -234,13 +338,12 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
               position: 'bottom-right',
             });
 
-            // Browser notification (only if user is active on another tab)
-            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-              new Notification(`🎯 New ${selectedSkill} Lead`, {
-                body: `${newLead.title} at ${newLead.company}`,
-                icon: newLead.company_logo || '/icon.png',
-                tag: 'new-lead'
-              });
+            // Send browser notification (only if user is active on another tab)
+            if (document.hidden) {
+              sendNotification(
+                `🎯 New ${selectedSkill} Lead`, 
+                `${newLead.title} at ${newLead.company}`
+              );
             }
           }
         )
@@ -261,11 +364,11 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
         supabase.removeChannel(realTimeSubscription);
       }
     };
-  }, [selectedSkill, isPro, user]);
+  }, [selectedSkill, isPro, user, sendNotification]);
 
   // Auto-refresh for Pro users (every 10 seconds)
   useEffect(() => {
-    if (!isPro) return;
+    if (!isPro || !selectedSkill || !user) return;
 
     const interval = setInterval(() => {
       if (!document.hidden) { // Only refresh if tab is active
@@ -274,46 +377,33 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
     }, 10000); // 10 seconds
 
     return () => clearInterval(interval);
-  }, [isPro, selectedSkill, fetchLeads]);
+  }, [isPro, selectedSkill, user, fetchLeads]);
 
-  // Initial fetch
+  // Initial fetch when selectedSkill changes
   useEffect(() => {
-    fetchLeads(true);
-  }, [selectedSkill]);
-
-  // Apply filters to leads
-  useEffect(() => {
-    let filtered = [...leads];
-    
-    // Apply additional client-side filters
-    if (filters?.experience) {
-      const expMap: Record<string, string> = {
-        'entry': '0-2',
-        'mid': '2-5',
-        'senior': '5+'
-      };
-      filtered = filtered.filter(lead => {
-        const desc = (lead.description + ' ' + lead.requirements.join(' ')).toLowerCase();
-        return desc.includes(expMap[filters.experience!]);
-      });
+    if (selectedSkill && user) {
+      fetchLeads(true);
     }
-    
-    // Sort by match score
-    filtered.sort((a, b) => b.match_score - a.match_score);
-    
-    setFilteredLeads(filtered);
-  }, [leads, filters]);
+  }, [selectedSkill, user]);
 
-  // Mark lead as contacted
-  const markAsContacted = async (leadId: string) => {
+  // Update filters when external filters change
+  useEffect(() => {
+    if (filters) {
+      setActiveFilters(filters);
+    }
+  }, [filters]);
+
+  // Mark lead with different statuses
+  const updateLeadStatus = async (leadId: string, status: Lead['status']) => {
     try {
       const { error } = await supabase
         .from('leads')
         .update({ 
-          status: 'contacted',
+          status,
           updated_at: new Date().toISOString()
         })
-        .eq('id', leadId);
+        .eq('id', leadId)
+        .eq('user_id', user?.id); // Security: ensure user owns the lead
 
       if (error) throw error;
 
@@ -321,14 +411,49 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
       setLeads(prev =>
         prev.map(lead =>
           lead.id === leadId
-            ? { ...lead, status: 'contacted', updated_at: new Date().toISOString() }
+            ? { ...lead, status, updated_at: new Date().toISOString() }
             : lead
         )
       );
 
-      toast.success('Marked as contacted');
+      toast.success(`Marked as ${status}`);
     } catch (err: any) {
-      toast.error('Failed to update lead status');
+      toast.error(`Failed to update lead status: ${err.message}`);
+      console.error(err);
+    }
+  };
+
+  const markAsContacted = (leadId: string) => updateLeadStatus(leadId, 'contacted');
+  const markAsInterview = (leadId: string) => updateLeadStatus(leadId, 'interview');
+  const markAsRejected = (leadId: string) => updateLeadStatus(leadId, 'rejected');
+  const markAsAccepted = (leadId: string) => updateLeadStatus(leadId, 'accepted');
+
+  // Add note to lead
+  const addNoteToLead = async (leadId: string, note: string) => {
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .update({ 
+          notes: note,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', leadId)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setLeads(prev =>
+        prev.map(lead =>
+          lead.id === leadId
+            ? { ...lead, notes: note, updated_at: new Date().toISOString() }
+            : lead
+        )
+      );
+
+      toast.success('Note added successfully');
+    } catch (err: any) {
+      toast.error(`Failed to add note: ${err.message}`);
       console.error(err);
     }
   };
@@ -340,17 +465,26 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
       throw new Error('Pro feature required');
     }
 
+    if (!user) {
+      toast.error('Please login to use AI Pitch');
+      throw new Error('User not logged in');
+    }
+
     try {
       const response = await fetch('/api/generate-pitch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ leadId }),
+        body: JSON.stringify({ 
+          leadId,
+          userId: user.id 
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate pitch');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate pitch');
       }
 
       const data = await response.json();
@@ -367,15 +501,23 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
       toast.success('AI Pitch generated successfully');
       return data.pitch;
     } catch (err: any) {
-      toast.error('Failed to generate AI pitch');
+      toast.error(`Failed to generate AI pitch: ${err.message}`);
       throw err;
     }
   };
 
   // Manual real-time refresh
-  const refetchRealTime = () => {
-    fetchLeads(true);
-  };
+  const refetchRealTime = useCallback(async () => {
+    await fetchLeads(true);
+  }, [fetchLeads]);
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setActiveFilters({});
+  }, []);
+
+  // Calculate statistics
+  const totalLeads = useMemo(() => leads.length, [leads]);
 
   return {
     leads,
@@ -383,13 +525,49 @@ export default function useLeads(filters?: LeadFilters): UseLeadsReturn {
     isLoading,
     error,
     lastFetched,
-    totalLeads: leads.length,
+    totalLeads,
     newLeadsCount,
     hasMore,
     fetchLeads,
     fetchMoreLeads,
     markAsContacted,
+    markAsInterview,
+    markAsRejected,
+    markAsAccepted,
+    addNoteToLead,
     generateAIPitch,
     refetchRealTime,
+    clearFilters,
   };
+}
+
+// Helper function to format salary
+export function formatSalary(lead: Lead): string {
+  if (!lead.salary_min && !lead.salary_max) {
+    return 'Not specified';
+  }
+  
+  if (lead.salary_min && lead.salary_max) {
+    return `${lead.salary_currency} ${lead.salary_min.toLocaleString()} - ${lead.salary_max.toLocaleString()}`;
+  }
+  
+  if (lead.salary_min) {
+    return `${lead.salary_currency} ${lead.salary_min.toLocaleString()}+`;
+  }
+  
+  return `${lead.salary_currency} Up to ${lead.salary_max!.toLocaleString()}`;
+}
+
+// Helper function to calculate days ago
+export function getDaysAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  return `${Math.floor(diffDays / 30)} months ago`;
 }
