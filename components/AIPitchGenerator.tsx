@@ -2,29 +2,25 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-// Rasta: components folder se bahar nikal kar (..) phir app ke andar context tak
+// Sahi raasta: useUser ko ek hi baar import karo
 import { useUser } from '../app/context/UserContext'; 
 import { supabase } from '../lib/supabase'; 
 import { toast } from 'react-hot-toast';
-import { Sparkles, Send, Copy, RefreshCw } from 'lucide-react';
 import { 
   Sparkles, 
+  Send, 
+  Copy, 
+  RefreshCw,
   Zap, 
   Target, 
   Edit, 
-  Copy, 
-  RefreshCw, 
   TrendingUp,
   Clock,
   BookOpen,
   MessageSquare,
-  Send,
   Check,
   AlertCircle
 } from 'lucide-react';
-import { useUser } from '@/context/UserContext';
-import { toast } from 'react-hot-toast';
-
 interface AIPitchGeneratorProps {
   leadId?: string;
   onPitchGenerated?: (pitch: string) => void;
