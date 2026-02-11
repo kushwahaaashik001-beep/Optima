@@ -1052,18 +1052,12 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {/* AI Pitch Modal */}
+     {/* AI Pitch Modal */}
       {showAIPitchModal && selectedLeadForPitch && (
         <AIPitchModal
           lead={selectedLeadForPitch}
           isOpen={showAIPitchModal}
           onClose={() => setShowAIPitchModal(false)}
-          onPitchGenerated={async () => {
-            toast.success('AI Pitch generated successfully!', {
-              icon: '🤖'
-            });
-            setShowAIPitchModal(false);
-          }}
         />
       )}
     </div>
