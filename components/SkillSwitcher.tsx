@@ -34,8 +34,19 @@ import {
   Gamepad2,
   TestTube,
   Truck,
-  Heart
+  Heart,
+  Cpu,
+  Video
 } from 'lucide-react';
+
+// Custom Brain icon component
+const Brain = (props: any) => (
+  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z" />
+    <path d="M12 9v6" />
+    <path d="M9 12h6" />
+  </svg>
+);
 
 const SKILL_ICONS: Record<SkillType, React.ReactNode> = {
   'React Developer': <Code className="w-4 h-4" />,
@@ -59,7 +70,8 @@ const SKILL_ICONS: Record<SkillType, React.ReactNode> = {
   'Business Analyst': <BarChart className="w-4 h-4" />,
   'Sales Executive': <ShoppingBag className="w-4 h-4" />,
   'Social Media Manager': <Camera className="w-4 h-4" />,
-  'E-commerce Specialist': <ShoppingBag className="w-4 h-4" />
+  'E-commerce Specialist': <ShoppingBag className="w-4 h-4" />,
+  'Video Editing': <Video className="w-4 h-4" />
 };
 
 const SKILL_CATEGORIES = [
@@ -76,7 +88,7 @@ const SKILL_CATEGORIES = [
   {
     id: 'design',
     name: 'Design & Creative',
-    skills: ['UI/UX Designer']
+    skills: ['UI/UX Designer', 'Video Editing']
   },
   {
     id: 'business',
@@ -95,15 +107,7 @@ const SKILL_CATEGORIES = [
   }
 ];
 
-const TRENDING_SKILLS = ['AI/ML Engineer', 'React Developer', 'Data Scientist', 'DevOps Engineer', 'Product Manager'];
-
-const Brain = (props: any) => (
-  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z" />
-    <path d="M12 9v6" />
-    <path d="M9 12h6" />
-  </svg>
-);
+const TRENDING_SKILLS: SkillType[] = ['AI/ML Engineer', 'React Developer', 'Data Scientist', 'DevOps Engineer', 'Product Manager', 'Video Editing'];
 
 export default function SkillSwitcher() {
   const { selectedSkill, setSelectedSkill, isPro } = useUser();
@@ -117,7 +121,16 @@ export default function SkillSwitcher() {
   useEffect(() => {
     const saved = localStorage.getItem('recent-skills');
     if (saved) {
-      setRecentSkills(JSON.parse(saved));
+      try {
+        const parsed = JSON.parse(saved);
+        // Filter only valid skills
+        const validSkills = parsed.filter((skill: string) => 
+          AVAILABLE_SKILLS.includes(skill as SkillType)
+        );
+        setRecentSkills(validSkills);
+      } catch (error) {
+        console.error('Error loading recent skills:', error);
+      }
     }
   }, []);
 
@@ -138,13 +151,20 @@ export default function SkillSwitcher() {
     setSearchQuery('');
   };
 
-  // Filter skills based on search
+  // Filter skills based on search and category
   const filteredSkills = AVAILABLE_SKILLS.filter(skill => {
     const matchesSearch = skill.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = activeCategory === 'all' || 
-      SKILL_CATEGORIES.find(cat => cat.id === activeCategory)?.skills.includes(skill);
     
-    return matchesSearch && matchesCategory;
+    if (activeCategory === 'all') {
+      return matchesSearch;
+    }
+    
+    if (activeCategory === 'trending') {
+      return matchesSearch && TRENDING_SKILLS.includes(skill);
+    }
+    
+    const category = SKILL_CATEGORIES.find(cat => cat.id === activeCategory);
+    return matchesSearch && category?.skills.includes(skill);
   });
 
   // Close dropdown on outside click
@@ -160,19 +180,33 @@ export default function SkillSwitcher() {
 
   // Get skill stats (simulated)
   const getSkillStats = (skill: SkillType) => {
-    const stats = {
+    const stats: Record<SkillType, { leads: number; growth: number }> = {
       'React Developer': { leads: 245, growth: 15 },
-      'AI/ML Engineer': { leads: 189, growth: 32 },
-      'Data Scientist': { leads: 167, growth: 22 },
       'Full Stack Developer': { leads: 156, growth: 18 },
+      'Frontend Developer': { leads: 132, growth: 12 },
+      'Backend Developer': { leads: 178, growth: 20 },
       'DevOps Engineer': { leads: 142, growth: 25 },
+      'Data Scientist': { leads: 167, growth: 22 },
+      'AI/ML Engineer': { leads: 189, growth: 32 },
+      'Mobile App Developer': { leads: 98, growth: 15 },
+      'UI/UX Designer': { leads: 115, growth: 20 },
       'Product Manager': { leads: 134, growth: 12 },
       'Digital Marketer': { leads: 128, growth: 8 },
-      'UI/UX Designer': { leads: 115, growth: 20 },
-      'Mobile App Developer': { leads: 98, growth: 15 },
+      'Content Writer': { leads: 95, growth: 10 },
+      'SEO Specialist': { leads: 88, growth: 12 },
+      'Blockchain Developer': { leads: 67, growth: 30 },
       'Cloud Architect': { leads: 87, growth: 28 },
+      'Cybersecurity Analyst': { leads: 76, growth: 25 },
+      'Game Developer': { leads: 54, growth: 18 },
+      'QA Engineer': { leads: 92, growth: 15 },
+      'Business Analyst': { leads: 108, growth: 10 },
+      'Sales Executive': { leads: 145, growth: 8 },
+      'Social Media Manager': { leads: 112, growth: 15 },
+      'E-commerce Specialist': { leads: 124, growth: 22 },
+      'Video Editing': { leads: 203, growth: 45 }
     };
-    return stats[skill as keyof typeof stats] || { leads: Math.floor(Math.random() * 200), growth: Math.floor(Math.random() * 30) };
+    
+    return stats[skill] || { leads: Math.floor(Math.random() * 200), growth: Math.floor(Math.random() * 30) };
   };
 
   return (
@@ -378,7 +412,7 @@ export default function SkillSwitcher() {
                             </div>
                             <div className="flex items-center text-xs text-gray-400 mt-1">
                               <Briefcase className="w-3 h-3 mr-1" />
-                              {stats.leds.toLocaleString()} opportunities
+                              {stats.leads.toLocaleString()} opportunities
                             </div>
                           </div>
                         </div>
