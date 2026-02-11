@@ -31,7 +31,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { Lead } from '@/app/hooks/useLeads';
-import { useUser } from '@/context/UserContext';
+import { useUser } from '../app/context/UserContext';
 import AIPitchModal from './AIPitchModal';
 import { toast } from 'react-hot-toast';
 
