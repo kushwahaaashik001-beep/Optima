@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // Context aur Hooks
 import { useUser, useCredits, useSubscription } from './context/UserContext';
-import useLeads, { formatSalary, getDaysAgo } from './hooks/useLeads';
+import useLeads from './hooks/useLeads';
 
 // Components
 import SkillSwitcher from '../components/SkillSwitcher';
@@ -59,8 +59,8 @@ interface LeadFilters {
 
 export default function DashboardPage() {
   const { selectedSkill, user, sendNotification } = useUser();
-  const { credits, canUseCredits, useCredits, isPro } = useCredits();
-  const { proPrice, upgradeToPro } = useSubscription();
+  const creditsContext = useCredits();
+  const subscriptionContext = useSubscription();
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filters, setFilters] = useState<LeadFilters>({
@@ -84,6 +84,14 @@ export default function DashboardPage() {
     totalEarnings: 0,
     successRate: 0
   });
+
+  // Extract values from contexts
+  const credits = creditsContext.credits;
+  const canUseCredits = creditsContext.canUseCredits;
+  const deductCredits = creditsContext.useCredits;
+  const isPro = creditsContext.isPro;
+  const proPrice = subscriptionContext.proPrice;
+  const upgradeToPro = subscriptionContext.upgradeToPro;
 
   // Use leads hook
   const {
@@ -138,7 +146,15 @@ export default function DashboardPage() {
   // Handle manual refresh
   const handleRefresh = async () => {
     try {
-      await useCredits(1);
+      if (!isPro) {
+        if (!canUseCredits(1)) {
+          toast.error('Insufficient credits! Upgrade to Pro.', {
+            icon: '⚠️'
+          });
+          return;
+        }
+        await deductCredits(1);
+      }
       await fetchLeads(true);
       toast.success('Leads refreshed successfully!', {
         icon: '🔄',
@@ -262,6 +278,19 @@ export default function DashboardPage() {
         return 0;
     }
   });
+
+  // Format last fetched time
+  const formatLastFetched = () => {
+    if (!lastFetched) return 'Never updated';
+    const now = new Date();
+    const fetched = new Date(lastFetched);
+    const diffMinutes = Math.floor((now.getTime() - fetched.getTime()) / (1000 * 60));
+    
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h ago`;
+    return `${Math.floor(diffMinutes / 1440)}d ago`;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-black">
@@ -596,7 +625,7 @@ export default function DashboardPage() {
                     Showing {sortedLeads.length} leads for <span className="text-purple-400 font-medium">{selectedSkill}</span>
                     {lastFetched && (
                       <span className="ml-2 text-sm text-gray-500">
-                        • Updated {getDaysAgo(lastFetched.toString())}
+                        • Updated {formatLastFetched()}
                       </span>
                     )}
                   </p>
@@ -604,7 +633,7 @@ export default function DashboardPage() {
                 <div className="flex items-center space-x-4">
                   <div className="text-sm text-gray-400 bg-gray-900/50 px-3 py-1.5 rounded-lg border border-gray-800">
                     <Clock className="inline w-4 h-4 mr-1" />
-                    {lastFetched ? new Date(lastFetched).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                    {formatLastFetched()}
                   </div>
                   <select
                     value={sortBy}
@@ -748,7 +777,7 @@ export default function DashboardPage() {
                     ) : (
                       <>
                         <ChevronRight className="inline w-5 h-5 mr-2 group-hover:translate-x-1 transition-transform" />
-                        Load More Opportunities ({totalLeads - sortedLeads.length} more)
+                        Load More Opportunities ({leads.length - sortedLeads.length} more)
                       </>
                     )}
                   </button>
