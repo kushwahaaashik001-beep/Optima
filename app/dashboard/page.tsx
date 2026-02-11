@@ -1,3 +1,4 @@
+import Navbar from '@/components/Navbar'; // Ye line sabse upar add karo
 export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50">
