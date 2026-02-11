@@ -7,7 +7,7 @@ import LiveTicker from '../components/LiveTicker';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
-import Script from 'next/script';
+import Scripts from '../components/Scripts'; // ✅ Naya component import karo
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -79,41 +79,8 @@ export default function RootLayout({
         <link rel="preload" href="/api/health" as="fetch" crossOrigin="anonymous" />
       </head>
       <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`}>
-        {/* Performance Tracking Scripts */}
-        <Script
-          strategy="afterInteractive"
-          src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"
-        />
-        <Script
-          id="google-analytics"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-XXXXXXXXXX', {
-                page_path: window.location.pathname,
-              });
-            `,
-          }}
-        />
-        
-        {/* Error Tracking */}
-        <Script
-          strategy="afterInteractive"
-          src="https://browser.sentry-cdn.com/7.0.0/bundle.min.js"
-          crossOrigin="anonymous"
-          onLoad={() => {
-            if (window.Sentry) {
-              window.Sentry.init({
-                dsn: "your-sentry-dsn",
-                tracesSampleRate: 0.1,
-                environment: process.env.NODE_ENV,
-              });
-            }
-          }}
-        />
+        {/* ✅ Sab client-side scripts ek saath yahan */}
+        <Scripts />
 
         {/* User Context Provider */}
         <UserProvider>
@@ -270,68 +237,6 @@ export default function RootLayout({
         {/* Vercel Analytics */}
         <Analytics />
         <SpeedInsights />
-
-        {/* Service Worker Registration */}
-        <Script
-          id="service-worker"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(
-                    function(registration) {
-                      console.log('ServiceWorker registration successful');
-                    },
-                    function(err) {
-                      console.log('ServiceWorker registration failed: ', err);
-                    }
-                  );
-                });
-              }
-            `,
-          }}
-        />
-
-        {/* PWA Install Prompt */}
-        <Script
-          id="pwa-install"
-          strategy="afterInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              let deferredPrompt;
-              window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                deferredPrompt = e;
-                
-                // Show install button
-                const installButton = document.createElement('button');
-                installButton.className = 'fixed bottom-20 right-4 z-50 bg-gradient-to-r from-purple-600 to-blue-500 text-white px-4 py-2 rounded-lg shadow-lg hidden';
-                installButton.id = 'install-button';
-                installButton.textContent = 'Install App';
-                document.body.appendChild(installButton);
-                
-                installButton.addEventListener('click', async () => {
-                  if (!deferredPrompt) return;
-                  deferredPrompt.prompt();
-                  const { outcome } = await deferredPrompt.userChoice;
-                  if (outcome === 'accepted') {
-                    installButton.remove();
-                  }
-                  deferredPrompt = null;
-                });
-                
-                // Show button after 5 seconds
-                setTimeout(() => {
-                  installButton.classList.remove('hidden');
-                  setTimeout(() => {
-                    installButton.classList.add('hidden');
-                  }, 10000);
-                }, 5000);
-              });
-            `,
-          }}
-        />
       </body>
     </html>
   );
@@ -391,13 +296,4 @@ function StatCard({ label, value, change }: { label: string; value: string; chan
       </div>
     </div>
   );
-}
-
-// Declare global types for scripts
-declare global {
-  interface Window {
-    dataLayer: any[];
-    gtag: (...args: any[]) => void;
-    Sentry: any;
-  }
 }
