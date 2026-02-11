@@ -21,19 +21,47 @@ interface LeadStatusTrackerProps {
   leads: Lead[];
 }
 
-const STATUS_COLORS = {
-  new: { bg: 'bg-blue-500', text: 'text-blue-400', icon: Clock },
-  contacted: { bg: 'bg-purple-500', text: 'text-purple-400', icon: Users },
-  interview: { bg: 'bg-amber-500', text: 'text-amber-400', icon: Target },
-  accepted: { bg: 'bg-green-500', text: 'text-green-400', icon: CheckCircle },
-  rejected: { bg: 'bg-red-500', text: 'text-red-400', icon: XCircle },
+// Define status type
+type StatusType = 'new' | 'contacted' | 'interview' | 'accepted' | 'rejected';
+
+// Status configuration with proper typing
+const STATUS_CONFIG: Record<StatusType, {
+  bg: string;
+  text: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = {
+  new: { 
+    bg: 'bg-blue-500', 
+    text: 'text-blue-400', 
+    icon: Clock 
+  },
+  contacted: { 
+    bg: 'bg-purple-500', 
+    text: 'text-purple-400', 
+    icon: Users 
+  },
+  interview: { 
+    bg: 'bg-amber-500', 
+    text: 'text-amber-400', 
+    icon: Target 
+  },
+  accepted: { 
+    bg: 'bg-green-500', 
+    text: 'text-green-400', 
+    icon: CheckCircle 
+  },
+  rejected: { 
+    bg: 'bg-red-500', 
+    text: 'text-red-400', 
+    icon: XCircle 
+  },
 };
 
-const STATUS_ORDER = ['new', 'contacted', 'interview', 'accepted', 'rejected'];
+const STATUS_ORDER: StatusType[] = ['new', 'contacted', 'interview', 'accepted', 'rejected'];
 
 export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
-  const [activeStatus, setActiveStatus] = useState<string | null>(null);
+  const [activeStatus, setActiveStatus] = useState<StatusType | null>(null);
   const [conversionRate, setConversionRate] = useState(0);
   const [avgResponseTime, setAvgResponseTime] = useState(0);
   const [trendData, setTrendData] = useState<number[]>([0, 0, 0, 0, 0]);
@@ -54,23 +82,32 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
     });
 
     // Calculate status counts
-    const statusCounts: Record<string, number> = {};
-    const statusDurations: Record<string, number[]> = {};
-
-    STATUS_ORDER.forEach(status => {
-      statusCounts[status] = 0;
-      statusDurations[status] = [];
-    });
+    const statusCounts: Record<StatusType, number> = {
+      new: 0,
+      contacted: 0,
+      interview: 0,
+      accepted: 0,
+      rejected: 0
+    };
+    
+    const statusDurations: Record<StatusType, number[]> = {
+      new: [],
+      contacted: [],
+      interview: [],
+      accepted: [],
+      rejected: []
+    };
 
     filteredLeads.forEach(lead => {
-      statusCounts[lead.status]++;
+      const status = lead.status as StatusType;
+      statusCounts[status]++;
       
       // Calculate time to move to next status
       if (lead.updated_at !== lead.created_at) {
         const created = new Date(lead.created_at);
         const updated = new Date(lead.updated_at);
         const duration = (updated.getTime() - created.getTime()) / (1000 * 3600 * 24);
-        statusDurations[lead.status].push(duration);
+        statusDurations[status].push(duration);
       }
     });
 
@@ -103,10 +140,18 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
 
   // Get status counts
   const getStatusCounts = () => {
-    const counts: Record<string, number> = {};
+    const counts: Record<StatusType, number> = {
+      new: 0,
+      contacted: 0,
+      interview: 0,
+      accepted: 0,
+      rejected: 0
+    };
+    
     STATUS_ORDER.forEach(status => {
       counts[status] = leads.filter(lead => lead.status === status).length;
     });
+    
     return counts;
   };
 
@@ -149,6 +194,12 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+  };
+
+  // Helper function to get status config safely
+  const getStatusConfig = (status: string) => {
+    const validStatus = status as StatusType;
+    return STATUS_CONFIG[validStatus] || STATUS_CONFIG.new;
   };
 
   return (
@@ -196,9 +247,9 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
 
       {/* Main Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        {STATUS_ORDER.map((status: string, index) => {
-  const currentStatus = status as keyof typeof STATUS_COLORS;
-  const Icon = STATUS_COLORS[currentStatus].icon
+        {STATUS_ORDER.map((status: StatusType, index) => {
+          const statusConfig = getStatusConfig(status);
+          const Icon = statusConfig.icon;
           const count = statusCounts[status] || 0;
           const percentage = totalLeads > 0 ? (count / totalLeads) * 100 : 0;
           const isActive = activeStatus === status || (!activeStatus && index === 0);
@@ -217,8 +268,8 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
               }`}
             >
               <div className="flex items-center justify-between mb-4">
-                <div className={`p-2 ${STATUS_COLORS[status].bg} bg-opacity-20 rounded-lg`}>
-                  <Icon className={`w-5 h-5 ${STATUS_COLORS[status].text}`} />
+                <div className={`p-2 ${statusConfig.bg} bg-opacity-20 rounded-lg`}>
+                  <Icon className={`w-5 h-5 ${statusConfig.text}`} />
                 </div>
                 <span className="text-xs font-semibold text-gray-400 uppercase">
                   {status}
@@ -238,7 +289,7 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
                   initial={{ width: 0 }}
                   animate={{ width: `${percentage}%` }}
                   transition={{ duration: 1, delay: index * 0.2 }}
-                  className={`h-full rounded-full ${STATUS_COLORS[status].bg}`}
+                  className={`h-full rounded-full ${statusConfig.bg}`}
                 />
               </div>
 
@@ -270,21 +321,22 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
             {STATUS_ORDER.map((status, index) => {
               const count = statusCounts[status] || 0;
               const percentage = totalLeads > 0 ? (count / totalLeads) * 100 : 0;
-              const Icon = STATUS_COLORS[status].icon;
+              const statusConfig = getStatusConfig(status);
+              const Icon = statusConfig.icon;
 
               return (
                 <div key={status} className="flex flex-col items-center">
                   <div className="relative">
                     {/* Connection dot */}
                     <div
-                      className={`w-3 h-3 ${STATUS_COLORS[status].bg} rounded-full absolute -top-1.5 left-1/2 transform -translate-x-1/2`}
+                      className={`w-3 h-3 ${statusConfig.bg} rounded-full absolute -top-1.5 left-1/2 transform -translate-x-1/2`}
                     />
                     
                     {/* Status circle */}
                     <div
-                      className={`w-12 h-12 ${STATUS_COLORS[status].bg} bg-opacity-20 border-2 ${STATUS_COLORS[status].bg.replace('bg-', 'border-')} rounded-full flex items-center justify-center`}
+                      className={`w-12 h-12 ${statusConfig.bg} bg-opacity-20 border-2 ${statusConfig.bg.replace('bg-', 'border-')} rounded-full flex items-center justify-center`}
                     >
-                      <Icon className={`w-5 h-5 ${STATUS_COLORS[status].text}`} />
+                      <Icon className={`w-5 h-5 ${statusConfig.text}`} />
                     </div>
                   </div>
                   
@@ -358,33 +410,42 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
         </div>
 
         <div className="h-32 flex items-end space-x-2">
-          {trendData.map((value, index) => (
-            <div key={index} className="flex-1 flex flex-col items-center">
-              <motion.div
-                initial={{ height: 0 }}
-                animate={{ height: `${value}%` }}
-                transition={{ duration: 1, delay: index * 0.1 }}
-                className={`w-full ${STATUS_COLORS[STATUS_ORDER[index]].bg} rounded-t-lg max-h-full`}
-                style={{ height: `${Math.min(value, 100)}%` }}
-              />
-              <div className="text-xs text-gray-500 mt-2 capitalize">
-                {STATUS_ORDER[index].slice(0, 3)}
+          {trendData.map((value, index) => {
+            const status = STATUS_ORDER[index];
+            const statusConfig = getStatusConfig(status);
+            
+            return (
+              <div key={index} className="flex-1 flex flex-col items-center">
+                <motion.div
+                  initial={{ height: 0 }}
+                  animate={{ height: `${value}%` }}
+                  transition={{ duration: 1, delay: index * 0.1 }}
+                  className={`w-full ${statusConfig.bg} rounded-t-lg max-h-full`}
+                  style={{ height: `${Math.min(value, 100)}%` }}
+                />
+                <div className="text-xs text-gray-500 mt-2 capitalize">
+                  {status.slice(0, 3)}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Legend */}
         <div className="flex flex-wrap gap-3 mt-6">
-          {STATUS_ORDER.map((status) => (
-            <div key={status} className="flex items-center space-x-2">
-              <div className={`w-3 h-3 ${STATUS_COLORS[status].bg} rounded-full`} />
-              <span className="text-sm text-gray-400 capitalize">{status}</span>
-              <span className="text-sm text-white font-medium">
-                {statusCounts[status] || 0}
-              </span>
-            </div>
-          ))}
+          {STATUS_ORDER.map((status) => {
+            const statusConfig = getStatusConfig(status);
+            
+            return (
+              <div key={status} className="flex items-center space-x-2">
+                <div className={`w-3 h-3 ${statusConfig.bg} rounded-full`} />
+                <span className="text-sm text-gray-400 capitalize">{status}</span>
+                <span className="text-sm text-white font-medium">
+                  {statusCounts[status] || 0}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
