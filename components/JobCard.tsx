@@ -1,424 +1,505 @@
 "use client";
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  Briefcase,
-  MapPin,
-  DollarSign,
-  Clock,
+  Briefcase, 
+  MapPin, 
+  DollarSign, 
+  Clock, 
+  ExternalLink,
+  MessageSquare,
+  Star,
   CheckCircle,
   XCircle,
+  Calendar,
+  Building,
   Mail,
   Phone,
-  ExternalLink,
-  Zap,
-  Star,
+  Globe,
+  Users,
   TrendingUp,
   Shield,
-  Calendar,
-  Users,
-  Award,
-  Link as LinkIcon,
-  Copy,
-  Eye,
-  EyeOff,
-  Heart,
-  Share2,
-  MessageSquare,
-  Bookmark,
-  AlertCircle,
-  ChevronRight
+  Zap,
+  Edit
 } from 'lucide-react';
-import { Lead } from '@/app/hooks/useLeads';
-import { useUser } from '../app/context/UserContext';
-import AIPitchModal from './AIPitchModal';
 import { toast } from 'react-hot-toast';
+import { Lead } from '@/app/hooks/useLeads';
 
-interface JobCardProps {
+export interface JobCardProps {
   lead: Lead;
-  onContacted?: (leadId: string) => void;
-  onGeneratePitch?: (leadId: string) => Promise<string>;
+  onContacted: (leadId: string) => Promise<void>;
+  onInterview?: (leadId: string) => Promise<void>;
+  onRejected?: (leadId: string) => Promise<void>;
+  onAccepted?: (leadId: string) => Promise<void>;
+  onAddNote?: (leadId: string, note: string) => Promise<void>;
+  onGeneratePitch: (lead: Lead) => Promise<void>;
+  viewMode?: 'grid' | 'list';
 }
 
-export default function JobCard({ lead, onContacted, onGeneratePitch }: JobCardProps) {
-  const { isPro } = useUser();
+export default function JobCard({
+  lead,
+  onContacted,
+  onInterview,
+  onRejected,
+  onAccepted,
+  onAddNote,
+  onGeneratePitch,
+  viewMode = 'grid'
+}: JobCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isAIPitchModalOpen, setIsAIPitchModalOpen] = useState(false);
-  const [generatedPitch, setGeneratedPitch] = useState<string>('');
+  const [note, setNote] = useState('');
+  const [isAddingNote, setIsAddingNote] = useState(false);
   const [isGeneratingPitch, setIsGeneratingPitch] = useState(false);
-  const [showContactInfo, setShowContactInfo] = useState(false);
 
-  // Format salary display
   const formatSalary = () => {
-    if (!lead.salary_min && !lead.salary_max) return 'Not specified';
-    
-    const min = lead.salary_min?.toLocaleString();
-    const max = lead.salary_max?.toLocaleString();
-    const currency = lead.salary_currency || 'USD';
-    
-    if (min && max) {
-      return `${currency} ${min} - ${max}`;
-    } else if (min) {
-      return `${currency} ${min}+`;
-    } else {
-      return `${currency} ${max}`;
+    if (!lead.salary_min && !lead.salary_max) {
+      return 'Not specified';
     }
-  };
-
-  // Format posted date
-  const formatPostedDate = () => {
-    const posted = new Date(lead.posted_date);
-    const now = new Date();
-    const diffHours = Math.floor((now.getTime() - posted.getTime()) / (1000 * 60 * 60));
     
-    if (diffHours < 1) return 'Just now';
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffHours < 168) return `${Math.floor(diffHours / 24)}d ago`;
-    return posted.toLocaleDateString();
+    if (lead.salary_min && lead.salary_max) {
+      return `${lead.salary_currency} ${lead.salary_min.toLocaleString()} - ${lead.salary_max.toLocaleString()}`;
+    }
+    
+    if (lead.salary_min) {
+      return `${lead.salary_currency} ${lead.salary_min.toLocaleString()}+`;
+    }
+    
+    return `${lead.salary_currency} Up to ${lead.salary_max!.toLocaleString()}`;
   };
 
-  // Get status color
+  const getDaysAgo = () => {
+    const date = new Date(lead.posted_date);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return `${Math.floor(diffDays / 30)} months ago`;
+  };
+
   const getStatusColor = () => {
     switch (lead.status) {
       case 'new': return 'bg-blue-500';
       case 'contacted': return 'bg-purple-500';
-      case 'interview': return 'bg-amber-500';
-      case 'accepted': return 'bg-green-500';
+      case 'interview': return 'bg-yellow-500';
       case 'rejected': return 'bg-red-500';
+      case 'accepted': return 'bg-green-500';
       default: return 'bg-gray-500';
     }
   };
 
-  // Get status icon
-  const getStatusIcon = () => {
+  const getStatusText = () => {
     switch (lead.status) {
-      case 'new': return <AlertCircle className="w-4 h-4" />;
-      case 'contacted': return <MessageSquare className="w-4 h-4" />;
-      case 'interview': return <Users className="w-4 h-4" />;
-      case 'accepted': return <Award className="w-4 h-4" />;
-      case 'rejected': return <XCircle className="w-4 h-4" />;
-      default: return null;
+      case 'new': return 'New';
+      case 'contacted': return 'Contacted';
+      case 'interview': return 'Interview';
+      case 'rejected': return 'Rejected';
+      case 'accepted': return 'Accepted';
+      default: return 'Unknown';
     }
   };
 
-  // Handle contact action
   const handleContact = async () => {
-    if (onContacted) {
+    try {
       await onContacted(lead.id);
+      toast.success('Marked as contacted!');
+    } catch (error) {
+      toast.error('Failed to update status');
     }
   };
 
-  // Handle AI pitch generation
   const handleGeneratePitch = async () => {
-    if (!isPro) {
-      toast.error('Upgrade to Pro to generate AI pitches');
-      return;
-    }
-
-    setIsGeneratingPitch(true);
     try {
-      if (onGeneratePitch) {
-        const pitch = await onGeneratePitch(lead.id);
-        setGeneratedPitch(pitch);
-        setIsAIPitchModalOpen(true);
-      }
+      setIsGeneratingPitch(true);
+      await onGeneratePitch(lead);
     } catch (error) {
-      toast.error('Failed to generate pitch');
+      console.error('Error generating pitch:', error);
     } finally {
       setIsGeneratingPitch(false);
     }
   };
 
-  // Copy to clipboard
-  const copyToClipboard = (text: string, message: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(message);
-  };
-
-  // Share job
-  const shareJob = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${lead.title} at ${lead.company}`,
-          text: `Check out this ${lead.skill} opportunity at ${lead.company}`,
-          url: lead.application_url,
-        });
-      } catch (error) {
-        console.log('Sharing cancelled');
-      }
-    } else {
-      copyToClipboard(lead.application_url, 'Link copied to clipboard');
+  const handleAddNote = async () => {
+    if (!note.trim() || !onAddNote) return;
+    
+    try {
+      await onAddNote(lead.id, note);
+      setNote('');
+      setIsAddingNote(false);
+      toast.success('Note added successfully!');
+    } catch (error) {
+      toast.error('Failed to add note');
     }
   };
 
-  return (
-    <>
+  const handleStatusUpdate = async (statusFn?: (leadId: string) => Promise<void>) => {
+    if (!statusFn) return;
+    
+    try {
+      await statusFn(lead.id);
+    } catch (error) {
+      toast.error('Failed to update status');
+    }
+  };
+
+  if (viewMode === 'list') {
+    return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        className="group relative bg-gradient-to-br from-gray-900 to-gray-950 border border-gray-800 rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all duration-300"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300"
       >
-        {/* Status Badge */}
-        <div className="absolute top-4 left-4 z-10">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${getStatusColor()} bg-opacity-20 backdrop-blur-sm`}>
-            {getStatusIcon()}
-            <span className="text-xs font-semibold capitalize">{lead.status}</span>
-          </div>
-        </div>
-
-        {/* Match Score Badge */}
-        <div className="absolute top-4 right-4 z-10">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-600 to-blue-600">
-            <Star className="w-4 h-4 text-white" />
-            <span className="text-xs font-bold text-white">{lead.match_score}% Match</span>
-          </div>
-        </div>
-
-        {/* Company Header */}
-        <div className="p-6 border-b border-gray-800">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start space-x-4">
-              {/* Company Logo */}
-              <div className="w-16 h-16 rounded-xl bg-gray-800 flex items-center justify-center overflow-hidden">
-                {lead.company_logo ? (
-                  <img 
-                    src={lead.company_logo} 
-                    alt={lead.company}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Briefcase className="w-8 h-8 text-gray-400" />
-                )}
-              </div>
-
-              {/* Company Info */}
-              <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-2">
-                  <h3 className="text-xl font-bold text-white group-hover:text-purple-300 transition-colors">
-                    {lead.title}
-                  </h3>
-                  {lead.is_verified && (
-                    <Shield className="w-5 h-5 text-green-400" title="Verified Company" />
-                  )}
-                </div>
-                
-                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
-                  <div className="flex items-center space-x-1">
-                    <Briefcase className="w-4 h-4" />
-                    <span className="font-medium">{lead.company}</span>
-                  </div>
-                  
-                  <div className="flex items-center space-x-1">
-                    <MapPin className="w-4 h-4" />
-                    <span>{lead.location}</span>
-                  </div>
-                  
-                  <div className="flex items-center space-x-1">
-                    <DollarSign className="w-4 h-4" />
-                    <span>{formatSalary()}</span>
-                  </div>
-                  
-                  <div className="flex items-center space-x-1">
-                    <Clock className="w-4 h-4" />
-                    <span>{formatPostedDate()}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setIsBookmarked(!isBookmarked)}
-                className={`p-2 rounded-lg transition-colors ${isBookmarked ? 'text-red-400 bg-red-400/10' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-              >
-                <Heart className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
-              </button>
-              
-              <button
-                onClick={shareJob}
-                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-              >
-                <Share2 className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="p-6">
-          {/* Requirements Tags */}
-          <div className="flex flex-wrap gap-2 mb-6">
-            {lead.requirements.slice(0, 5).map((req, index) => (
-              <span
-                key={index}
-                className="px-3 py-1.5 bg-gray-800 text-gray-300 text-sm rounded-lg border border-gray-700"
-              >
-                {req}
-              </span>
-            ))}
-            {lead.requirements.length > 5 && (
-              <span className="px-3 py-1.5 bg-gray-800 text-gray-400 text-sm rounded-lg">
-                +{lead.requirements.length - 5} more
-              </span>
-            )}
-          </div>
-
-          {/* Description Preview */}
-          <div className="mb-6">
-            <p className={`text-gray-300 ${isExpanded ? '' : 'line-clamp-3'}`}>
-              {lead.description}
-            </p>
-            {lead.description.length > 300 && (
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-2 text-purple-400 hover:text-purple-300 text-sm font-medium flex items-center"
-              >
-                {isExpanded ? 'Show less' : 'Read more'}
-                <ChevronRight className={`w-4 h-4 ml-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-              </button>
-            )}
-          </div>
-
-          {/* Contact Information (Collapsible) */}
-          {(lead.contact_email || lead.contact_phone) && (
-            <div className="mb-6 p-4 bg-gray-800/50 rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-white">Contact Information</h4>
-                <button
-                  onClick={() => setShowContactInfo(!showContactInfo)}
-                  className="text-xs text-gray-400 hover:text-white flex items-center"
-                >
-                  {showContactInfo ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
-                  {showContactInfo ? 'Hide' : 'Show'}
-                </button>
-              </div>
-              
-              {showContactInfo && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {lead.contact_email && (
-                    <div className="flex items-center space-x-3 p-3 bg-gray-900 rounded-lg">
-                      <Mail className="w-5 h-5 text-blue-400" />
-                      <div className="flex-1">
-                        <div className="text-xs text-gray-500">Email</div>
-                        <div className="text-sm text-white font-medium">{lead.contact_email}</div>
-                      </div>
-                      <button
-                        onClick={() => copyToClipboard(lead.contact_email!, 'Email copied')}
-                        className="p-2 text-gray-400 hover:text-white"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                  
-                  {lead.contact_phone && (
-                    <div className="flex items-center space-x-3 p-3 bg-gray-900 rounded-lg">
-                      <Phone className="w-5 h-5 text-green-400" />
-                      <div className="flex-1">
-                        <div className="text-xs text-gray-500">Phone</div>
-                        <div className="text-sm text-white font-medium">{lead.contact_phone}</div>
-                      </div>
-                      <button
-                        onClick={() => copyToClipboard(lead.contact_phone!, 'Phone copied')}
-                        className="p-2 text-gray-400 hover:text-white"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-4 mb-4">
+              {lead.company_logo ? (
+                <img
+                  src={lead.company_logo}
+                  alt={lead.company}
+                  className="w-12 h-12 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl flex items-center justify-center">
+                  <Building className="w-6 h-6 text-purple-400" />
                 </div>
               )}
+              
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white">{lead.title}</h3>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor()} text-white`}>
+                    {getStatusText()}
+                  </span>
+                </div>
+                <p className="text-gray-400">{lead.company}</p>
+              </div>
             </div>
-          )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3">
-            {/* Apply Button */}
-            <a
-              href={lead.application_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity"
-            >
-              <ExternalLink className="w-5 h-5" />
-              <span>Apply Now</span>
-            </a>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-300">{lead.location}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-300">{formatSalary()}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-300">{getDaysAgo()}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-300">{lead.match_score}% match</span>
+              </div>
+            </div>
 
-            {/* AI Pitch Button (Pro only) */}
-            {isPro && (
-              <button
-                onClick={handleGeneratePitch}
-                disabled={isGeneratingPitch || lead.ai_pitch_generated}
-                className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isGeneratingPitch ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Generating...</span>
-                  </>
-                ) : lead.ai_pitch_generated ? (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Pitch Ready</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-5 h-5" />
-                    <span>AI Pitch</span>
-                  </>
+            <p className="text-gray-400 mb-4 line-clamp-2">{lead.description}</p>
+
+            <div className="flex flex-wrap gap-2 mb-4">
+              {lead.requirements.slice(0, 3).map((req, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-sm"
+                >
+                  {req}
+                </span>
+              ))}
+              {lead.requirements.length > 3 && (
+                <span className="px-3 py-1 bg-gray-800 text-gray-400 rounded-full text-sm">
+                  +{lead.requirements.length - 3} more
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleContact}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity"
+                >
+                  Mark as Contacted
+                </button>
+                
+                {onInterview && (
+                  <button
+                    onClick={() => handleStatusUpdate(onInterview)}
+                    className="px-4 py-2 bg-gradient-to-r from-yellow-600 to-amber-600 text-white rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    Mark Interview
+                  </button>
                 )}
-              </button>
-            )}
+                
+                {onGeneratePitch && (
+                  <button
+                    onClick={handleGeneratePitch}
+                    disabled={isGeneratingPitch}
+                    className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {isGeneratingPitch ? 'Generating...' : 'AI Pitch'}
+                  </button>
+                )}
+              </div>
 
-            {/* Mark as Contacted */}
-            <button
-              onClick={handleContact}
-              disabled={lead.status !== 'new'}
-              className="px-6 py-3 bg-gray-800 text-gray-300 font-semibold rounded-xl hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Mark Contacted
-            </button>
-          </div>
-        </div>
-
-        {/* Footer Stats */}
-        <div className="px-6 py-4 border-t border-gray-800 bg-gray-900/50">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-xs text-gray-500 mb-1">Source</div>
-              <div className="text-sm font-semibold text-white capitalize">{lead.source}</div>
-            </div>
-            
-            <div className="text-center">
-              <div className="text-xs text-gray-500 mb-1">Match Score</div>
-              <div className="text-sm font-semibold text-white">{lead.match_score}%</div>
-            </div>
-            
-            <div className="text-center">
-              <div className="text-xs text-gray-500 mb-1">Response Rate</div>
-              <div className="text-sm font-semibold text-green-400">68%</div>
-            </div>
-            
-            <div className="text-center">
-              <div className="text-xs text-gray-500 mb-1">Avg. Response Time</div>
-              <div className="text-sm font-semibold text-blue-400">2.4 days</div>
+              <a
+                href={lead.application_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Apply
+              </a>
             </div>
           </div>
         </div>
       </motion.div>
+    );
+  }
 
-      {/* AI Pitch Modal */}
-      <AIPitchModal
-        isOpen={isAIPitchModalOpen}
-        onClose={() => setIsAIPitchModalOpen(false)}
-        pitch={generatedPitch}
-        lead={lead}
-      />
-    </>
+  // Grid view (default)
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 group"
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            {lead.company_logo ? (
+              <img
+                src={lead.company_logo}
+                alt={lead.company}
+                className="w-12 h-12 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl flex items-center justify-center">
+                <Building className="w-6 h-6 text-purple-400" />
+              </div>
+            )}
+            
+            <div>
+              <h3 className="text-lg font-bold text-white group-hover:text-purple-300 transition-colors">
+                {lead.title}
+              </h3>
+              <p className="text-gray-400">{lead.company}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex flex-col items-end">
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor()} text-white mb-2`}>
+            {getStatusText()}
+          </span>
+          <span className="px-2 py-1 bg-gray-800 text-gray-300 rounded text-xs">
+            {lead.match_score}% match
+          </span>
+        </div>
+      </div>
+
+      {/* Details */}
+      <div className="space-y-3 mb-4">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          <span className="text-gray-300 text-sm truncate">{lead.location}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          <span className="text-gray-300 text-sm">{formatSalary()}</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          <span className="text-gray-300 text-sm">{getDaysAgo()}</span>
+        </div>
+      </div>
+
+      {/* Requirements */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {lead.requirements.slice(0, 3).map((req, index) => (
+          <span
+            key={index}
+            className="px-2 py-1 bg-gray-800 text-gray-300 rounded-lg text-xs"
+          >
+            {req}
+          </span>
+        ))}
+        {lead.requirements.length > 3 && (
+          <span className="px-2 py-1 bg-gray-800 text-gray-400 rounded-lg text-xs">
+            +{lead.requirements.length - 3}
+          </span>
+        )}
+      </div>
+
+      {/* Description */}
+      <p className="text-gray-400 text-sm mb-4 line-clamp-3">
+        {lead.description}
+      </p>
+
+      {/* Expand Button */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full text-center text-purple-400 hover:text-purple-300 text-sm font-medium mb-4"
+      >
+        {isExpanded ? 'Show Less' : 'Show More Details'}
+      </button>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          className="space-y-4 border-t border-gray-800 pt-4"
+        >
+          {/* Contact Info */}
+          {(lead.contact_email || lead.contact_phone) && (
+            <div>
+              <h4 className="text-white font-medium mb-2">Contact Information</h4>
+              <div className="flex flex-wrap gap-4">
+                {lead.contact_email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-300 text-sm">{lead.contact_email}</span>
+                  </div>
+                )}
+                {lead.contact_phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-300 text-sm">{lead.contact_phone}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Requirements Full */}
+          <div>
+            <h4 className="text-white font-medium mb-2">Requirements</h4>
+            <ul className="space-y-1">
+              {lead.requirements.map((req, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-300 text-sm">{req}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Notes Section */}
+          {onAddNote && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-white font-medium">Notes</h4>
+                <button
+                  onClick={() => setIsAddingNote(!isAddingNote)}
+                  className="text-purple-400 hover:text-purple-300 text-sm flex items-center gap-1"
+                >
+                  <Edit className="w-3 h-3" />
+                  Add Note
+                </button>
+              </div>
+              
+              {isAddingNote && (
+                <div className="space-y-2">
+                  <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Add a note about this lead..."
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+                    rows={2}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setIsAddingNote(false)}
+                      className="px-3 py-1 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddNote}
+                      disabled={!note.trim()}
+                      className="px-3 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-50"
+                    >
+                      Save Note
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {lead.notes && (
+                <div className="mt-2 p-3 bg-gray-800/50 rounded-lg">
+                  <p className="text-gray-300 text-sm">{lead.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-800">
+        <button
+          onClick={handleContact}
+          className="flex-1 px-3 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
+        >
+          Mark Contacted
+        </button>
+        
+        <button
+          onClick={handleGeneratePitch}
+          disabled={isGeneratingPitch}
+          className="flex-1 px-3 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm font-medium"
+        >
+          {isGeneratingPitch ? 'Generating...' : 'AI Pitch'}
+        </button>
+        
+        <a
+          href={lead.application_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+        >
+          <ExternalLink className="w-4 h-4" />
+          Apply
+        </a>
+      </div>
+
+      {/* Quick Status Buttons */}
+      <div className="flex gap-2 mt-3">
+        {onInterview && (
+          <button
+            onClick={() => handleStatusUpdate(onInterview)}
+            className="flex-1 px-2 py-1.5 bg-yellow-600/20 text-yellow-400 rounded-lg hover:bg-yellow-600/30 transition-colors text-xs"
+          >
+            Interview
+          </button>
+        )}
+        
+        {onRejected && (
+          <button
+            onClick={() => handleStatusUpdate(onRejected)}
+            className="flex-1 px-2 py-1.5 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-colors text-xs"
+          >
+            Reject
+          </button>
+        )}
+        
+        {onAccepted && (
+          <button
+            onClick={() => handleStatusUpdate(onAccepted)}
+            className="flex-1 px-2 py-1.5 bg-green-600/20 text-green-400 rounded-lg hover:bg-green-600/30 transition-colors text-xs"
+          >
+            Accept
+          </button>
+        )}
+      </div>
+    </motion.div>
   );
 }
