@@ -752,7 +752,9 @@ export default function DashboardPage() {
                           onRejected={() => markAsRejected(lead.id)}
                           onAccepted={() => markAsAccepted(lead.id)}
                           onAddNote={(note: string) => addNoteToLead(lead.id, note)}
-                          onGeneratePitch={() => handleGenerateAIPitch(lead)}
+                          onGeneratePitch={async () => {
+  await handleGenerateAIPitch(lead);
+  return "";
                           viewMode={viewMode}
                         />
                       </motion.div>
