@@ -8,7 +8,6 @@ import {
   DollarSign, 
   Clock, 
   ExternalLink,
-  MessageSquare,
   Star,
   CheckCircle,
   XCircle,
@@ -16,13 +15,7 @@ import {
   Building,
   Mail,
   Phone,
-  Globe,
-  Users,
-  TrendingUp,
-  Shield,
-  Zap,
   Edit,
-  Award,
   Sparkles,
   Bookmark,
   Send
@@ -56,6 +49,9 @@ export default function JobCard({
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isGeneratingPitch, setIsGeneratingPitch] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+
+  // ✅ Safe access to lead.type – agar property nahi hai to default 'Full-time'
+  const jobType = ('type' in lead ? (lead as any).type : null) || 'Full-time';
 
   const formatSalary = () => {
     if (!lead.salary_min && !lead.salary_max) {
@@ -241,7 +237,7 @@ export default function JobCard({
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Briefcase className="w-4 h-4 text-gray-500" />
-                <span className="text-gray-300 capitalize">{lead.type || 'Full-time'}</span>
+                <span className="text-gray-300 capitalize">{jobType}</span>
               </div>
             </div>
 
@@ -396,7 +392,7 @@ export default function JobCard({
         </div>
         <div className="flex items-center gap-2 px-3 py-2 bg-gray-800/40 rounded-lg border border-gray-700/50">
           <Briefcase className="w-4 h-4 text-gray-500" />
-          <span className="text-gray-300 text-xs capitalize">{lead.type || 'Full-time'}</span>
+          <span className="text-gray-300 text-xs capitalize">{jobType}</span>
         </div>
       </div>
 
