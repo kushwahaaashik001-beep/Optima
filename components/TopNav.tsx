@@ -9,7 +9,7 @@ import {
   useCredits,
   AVAILABLE_SKILLS,
   type SkillType 
-} from '@/context/UserContext';
+} from '../app/context/UserContext';
 import {
   Bell,
   CreditCard,
