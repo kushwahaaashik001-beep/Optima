@@ -746,18 +746,16 @@ export default function DashboardPage() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <JobCard
-                          lead={lead}
-                          onContacted={() => markAsContacted(lead.id)}
-                          onInterview={() => markAsInterview(lead.id)}
-                          onRejected={() => markAsRejected(lead.id)}
-                          onAccepted={() => markAsAccepted(lead.id)}
-                          onAddNote={(note: string) => addNoteToLead(lead.id, note)}
-                         onGeneratePitch={async () => {
-  await handleGenerateAIPitch(lead);
-  return ""; 
-}}
-                          viewMode={viewMode}
-                        />
+  key={lead.id}
+  lead={lead}
+  onAccepted={() => markAsAccepted(lead.id)}
+  onAddNote={(note: string) => addNoteToLead(lead.id, note)}
+  onGeneratePitch={async () => {
+    await handleGenerateAIPitch(lead);
+    return "";
+  }}
+  viewMode={viewMode}
+/>
                       </motion.div>
                     ))}
                   </motion.div>
