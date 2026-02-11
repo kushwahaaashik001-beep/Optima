@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+// Rasta: components folder se bahar nikal kar (..) phir app ke andar context tak
+import { useUser } from '../app/context/UserContext'; 
+import { supabase } from '../lib/supabase'; 
+import { toast } from 'react-hot-toast';
+import { Sparkles, Send, Copy, RefreshCw } from 'lucide-react';
 import { 
   Sparkles, 
   Zap, 
