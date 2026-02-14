@@ -17,13 +17,12 @@ import {
 import { toast } from 'react-hot-toast';
 import { Lead } from '@/app/hooks/useLeads';
 
-// ✅ Flexible props – all optional, accept both job/lead
 export interface JobCardProps {
-  job?: any;                     // for old pages
-  lead?: Lead;                    // for new dashboard
-  onGeneratePitch?: (lead: Lead) => Promise<void>; // optional
+  job?: any;
+  lead?: Lead;
+  onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
-  // Old callbacks – made optional
+  // Old callbacks – optional for compatibility
   onContacted?: (id: string) => Promise<void>;
   onInterview?: (id: string) => Promise<void>;
   onRejected?: (id: string) => Promise<void>;
@@ -37,23 +36,14 @@ export default function JobCard({
   lead,
   onGeneratePitch,
   creditsRemaining = 3,
-  // Accept old callbacks but don't use them (to avoid breaking)
-  onContacted,
-  onInterview,
-  onRejected,
-  onAccepted,
-  onAddNote,
   viewMode = 'grid'
 }: JobCardProps) {
-  // Determine which data object to use
   const data = lead || job;
-  if (!data) return null; // safeguard
+  if (!data) return null;
 
-  // Local state
   const [isGeneratingPitch, setIsGeneratingPitch] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
-  // ----- Helper Functions -----
   const jobType = ('type' in data ? data.type : null) || 'Full-time';
 
   const formatSalary = () => {
@@ -78,12 +68,11 @@ export default function JobCard({
     return `${Math.floor(diffDays / 30)} months ago`;
   };
 
-  // ----- Handlers -----
   const handleGeneratePitch = async () => {
     if (isGeneratingPitch || !onGeneratePitch) return;
     try {
       setIsGeneratingPitch(true);
-      await onGeneratePitch(data); // pass the lead object
+      await onGeneratePitch(data);
     } catch (error) {
       console.error('Pitch generation failed:', error);
       toast.error('Failed to generate pitch');
@@ -97,7 +86,6 @@ export default function JobCard({
     toast.success(isSaved ? 'Removed from saved' : 'Saved to leads');
   };
 
-  // ----- Determine button state -----
   const hasCredits = creditsRemaining > 0;
   const buttonText = hasCredits
     ? isGeneratingPitch
@@ -113,44 +101,32 @@ export default function JobCard({
       whileHover={{ y: -4 }}
       className="group relative bg-white rounded-2xl border border-slate-200/70 p-5 shadow-sm hover:shadow-xl hover:border-blue-300/50 transition-all duration-200"
     >
-      {/* Premium corner gradient (subtle) */}
       <div className="absolute right-0 top-0 w-24 h-24 overflow-hidden rounded-tr-2xl pointer-events-none">
         <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-400/10 to-indigo-400/10 blur-2xl" />
       </div>
 
-      {/* ----- Header: Logo, Title, Company, Match ----- */}
+      {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          {/* Company Logo / Placeholder */}
           {data.company_logo ? (
-            <img
-              src={data.company_logo}
-              alt={data.company}
-              className="w-10 h-10 rounded-lg object-cover ring-1 ring-slate-200 group-hover:ring-blue-200 transition-all"
-            />
+            <img src={data.company_logo} alt={data.company} className="w-10 h-10 rounded-lg object-cover ring-1 ring-slate-200 group-hover:ring-blue-200" />
           ) : (
             <div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg flex items-center justify-center ring-1 ring-slate-200 group-hover:ring-blue-200">
               <Building className="w-5 h-5 text-slate-500" />
             </div>
           )}
-
           <div>
-            <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
-              {data.title}
-            </h3>
+            <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 line-clamp-1">{data.title}</h3>
             <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
               <Building className="w-3.5 h-3.5" />
               <span className="truncate">{data.company}</span>
             </p>
           </div>
         </div>
-
-        {/* Match Score & New Badge */}
         <div className="flex flex-col items-end gap-1.5">
           {data.status === 'new' && (
             <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-semibold rounded-full border border-green-200">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse" />
-              NEW
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse" /> NEW
             </span>
           )}
           <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 rounded-lg border border-amber-100">
@@ -160,7 +136,7 @@ export default function JobCard({
         </div>
       </div>
 
-      {/* ----- Key Details (Grid) ----- */}
+      {/* Details Grid */}
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
           <MapPin className="w-3.5 h-3.5 text-slate-400" />
@@ -180,13 +156,10 @@ export default function JobCard({
         </div>
       </div>
 
-      {/* ----- Requirements Pills ----- */}
+      {/* Requirements Pills */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {data.requirements?.slice(0, 3).map((req: string, idx: number) => (
-          <span
-            key={idx}
-            className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200"
-          >
+          <span key={idx} className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200">
             {req}
           </span>
         ))}
@@ -197,14 +170,12 @@ export default function JobCard({
         )}
       </div>
 
-      {/* ----- Description ----- */}
-      <p className="text-sm text-slate-600 leading-relaxed line-clamp-2 mb-5">
-        {data.description}
-      </p>
+      {/* Description */}
+      <p className="text-sm text-slate-600 leading-relaxed line-clamp-2 mb-5">{data.description}</p>
 
-      {/* ----- Action Buttons ----- */}
+      {/* Action Buttons */}
       <div className="flex items-center gap-2">
-        {/* PRIMARY – Generate AI Pitch (Revenue Driver) */}
+        {/* PRIMARY – Generate AI Pitch */}
         <button
           onClick={handleGeneratePitch}
           disabled={isGeneratingPitch || !onGeneratePitch}
@@ -220,47 +191,36 @@ export default function JobCard({
           `}
         >
           {isGeneratingPitch ? (
-            <span className="flex items-center gap-2">
-              <span className="animate-spin">⚡</span> Generating...
-            </span>
+            <span className="flex items-center gap-2"><span className="animate-spin">⚡</span> Generating...</span>
           ) : (
             <>
               {buttonIcon}
               {buttonText}
-              {hasCredits && (
-                <span className="ml-1 text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">
-                  1 credit
-                </span>
-              )}
+              {hasCredits && <span className="ml-1 text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">1 credit</span>}
             </>
           )}
         </button>
 
-        {/* SECONDARY – Apply (External) */}
+        {/* SECONDARY – Apply */}
         <a
           href={data.application_url}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium text-sm hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
         >
-          <ExternalLink className="w-4 h-4" />
-          Apply
+          <ExternalLink className="w-4 h-4" /> Apply
         </a>
 
-        {/* TERTIARY – Save (Bookmark) */}
-        <button
-          onClick={handleSaveToggle}
-          className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-colors"
-        >
+        {/* TERTIARY – Save */}
+        <button onClick={handleSaveToggle} className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-colors">
           <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-amber-500 text-amber-500' : ''}`} />
         </button>
       </div>
 
-      {/* ----- Tiny credit hint (if no credits left) ----- */}
+      {/* Credit Hint */}
       {!hasCredits && (
         <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
-          <Zap className="w-3.5 h-3.5" />
-          No credits left – upgrade to generate AI pitches
+          <Zap className="w-3.5 h-3.5" /> No credits left – upgrade to generate AI pitches
         </p>
       )}
     </motion.div>
