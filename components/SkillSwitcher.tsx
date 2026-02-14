@@ -31,6 +31,7 @@ import {
   Gamepad2,
   TestTube,
   Video
+  Zap 
 } from 'lucide-react';
 
 // Custom Brain icon
