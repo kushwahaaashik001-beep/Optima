@@ -109,15 +109,28 @@ const SKILL_CATEGORIES = [
 
 const TRENDING_SKILLS: SkillType[] = ['AI/ML Engineer', 'React Developer', 'Data Scientist', 'DevOps Engineer', 'Product Manager', 'Video Editing'];
 
-// ✅ Props interface
+// ✅ Props interface – now optional
 interface SkillSwitcherProps {
-  selectedSkill: string;          // currently selected skill (from parent)
-  onSkillChange: (skill: string) => void;  // callback to update parent
+  selectedSkill?: string;          // optional – if not provided, use from context
+  onSkillChange?: (skill: string) => void;  // optional – fallback to context setter
 }
 
-export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwitcherProps) {
-  // 🔥 We still use context for isPro (and maybe other things), but NOT for selected skill
-  const { isPro } = useUser();
+export default function SkillSwitcher({ 
+  selectedSkill: propSelectedSkill, 
+  onSkillChange: propOnSkillChange 
+}: SkillSwitcherProps) {
+  // 🔥 Use context as fallback
+  const { selectedSkill: contextSkill, setSelectedSkill: setContextSkill, isPro } = useUser();
+
+  // Determine the effective skill and change handler
+  const effectiveSelectedSkill = propSelectedSkill ?? contextSkill;
+  const handleSkillChange = (skill: SkillType) => {
+    if (propOnSkillChange) {
+      propOnSkillChange(skill);
+    } else {
+      setContextSkill(skill);
+    }
+  };
 
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,9 +164,9 @@ export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwi
     }
   };
 
-  // Handle skill selection – call parent's onSkillChange
+  // Handle skill selection – call parent's onSkillChange or context
   const handleSkillSelect = async (skill: SkillType) => {
-    onSkillChange(skill);   // ✅ update parent state
+    handleSkillChange(skill);
     saveToRecent(skill);
     setIsOpen(false);
     setSearchQuery('');
@@ -226,7 +239,7 @@ export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwi
             <div className="text-left">
               <div className="flex items-center space-x-2 mb-1">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Selected Skill</span>
-                {TRENDING_SKILLS.includes(selectedSkill as SkillType) && (
+                {TRENDING_SKILLS.includes(effectiveSelectedSkill as SkillType) && (
                   <span className="flex items-center text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
                     <TrendingUp className="w-3 h-3 mr-1" />
                     Trending
@@ -234,13 +247,13 @@ export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwi
                 )}
               </div>
               <div className="flex items-center space-x-3">
-                <span className="text-2xl font-bold text-white">{selectedSkill}</span>
+                <span className="text-2xl font-bold text-white">{effectiveSelectedSkill}</span>
                 <div className="flex items-center text-sm text-gray-400">
                   <Zap className="w-4 h-4 mr-1 text-green-400" />
-                  <span>{getSkillStats(selectedSkill as SkillType).leads} active leads</span>
+                  <span>{getSkillStats(effectiveSelectedSkill as SkillType).leads} active leads</span>
                   <span className="mx-2">•</span>
                   <TrendingUp className="w-4 h-4 mr-1 text-blue-400" />
-                  <span className="text-green-400">+{getSkillStats(selectedSkill as SkillType).growth}%</span>
+                  <span className="text-green-400">+{getSkillStats(effectiveSelectedSkill as SkillType).growth}%</span>
                 </div>
               </div>
             </div>
@@ -382,7 +395,7 @@ export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwi
                 {filteredSkills.map(skill => {
                   const stats = getSkillStats(skill);
                   const isTrending = TRENDING_SKILLS.includes(skill);
-                  const isSelected = skill === selectedSkill;
+                  const isSelected = skill === effectiveSelectedSkill;
                   
                   return (
                     <button
@@ -472,7 +485,7 @@ export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwi
                     <div>
                       <h4 className="text-sm font-semibold text-white">Pro Feature Active</h4>
                       <p className="text-xs text-gray-400">
-                        You'll receive real-time leads for {selectedSkill} every 10 seconds
+                        You'll receive real-time leads for {effectiveSelectedSkill} every 10 seconds
                       </p>
                     </div>
                   </div>
