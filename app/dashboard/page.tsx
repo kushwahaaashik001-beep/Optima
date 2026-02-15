@@ -3,11 +3,11 @@
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import JobCard, { Lead } from '@/components/JobCard';
 import { toast } from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import UpgradeModal from '@/components/UpgradeModal';
 import SkillSwitcher from '@/components/SkillSwitcher';
+import JobCard, { Lead } from '@/components/JobCard';
 import { Zap, TrendingUp, Crown, Sparkles } from 'lucide-react';
 import { updateUserCredits, logUserActivity } from '@/lib/supabase';
 
@@ -20,6 +20,7 @@ function DashboardContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch user credits and leads
   useEffect(() => {
     const fetchUserAndLeads = async () => {
       setLoading(true);
@@ -35,7 +36,7 @@ function DashboardContent() {
           setCredits(profile.credits);
         }
 
-        // Fetch leads
+        // Fetch leads – select all columns, order by created_at
         let query = supabase
           .from('leads')
           .select('*')
@@ -107,6 +108,7 @@ function DashboardContent() {
       setCredits(newCredits);
       await logUserActivity(DEMO_USER_ID, 'generate_pitch', { lead_id: lead.id });
 
+      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000));
       toast.success(`✨ AI Pitch generated! (1 credit used, ${newCredits} left)`);
     } catch (error) {
@@ -133,9 +135,7 @@ function DashboardContent() {
             </div>
             <div>
               <p className="text-sm text-slate-600">Credits Remaining</p>
-              <p className="text-2xl font-bold text-slate-900">
-                {credits} / 3
-              </p>
+              <p className="text-2xl font-bold text-slate-900">{credits} / 3</p>
             </div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
@@ -225,5 +225,5 @@ function DashboardContent() {
   );
 }
 
-// ⚡ IMPORTANT: This single line fixes the #425 hydration error
+// ⚡ IMPORTANT: This single line kills the #425 hydration error!
 export default dynamic(() => Promise.resolve(DashboardContent), { ssr: false });
