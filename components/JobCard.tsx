@@ -22,7 +22,7 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
-  // The following are optional – included for backward compatibility with other pages
+  // Old props – kept for backward compatibility (won't break if passed)
   onContacted?: (id: string) => void;
   onInterview?: (id: string) => void;
   onRejected?: (id: string) => void;
@@ -35,7 +35,7 @@ export default function JobCard({
   lead, 
   onGeneratePitch, 
   creditsRemaining = 3,
-  // accept old props but don't use them
+  ...rest // accept any other props without using them
 }: JobCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
