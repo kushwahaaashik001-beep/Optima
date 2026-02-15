@@ -7,7 +7,7 @@ import LiveTicker from '../components/LiveTicker';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
-import Scripts from '../components/Scripts'; // ✅ Naya component import karo
+import Scripts from '../components/Scripts';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -52,7 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>   {/* ⭐ Added suppressHydrationWarning */}
       <head>
         {/* Favicon */}
         <link rel="icon" href="/favicon.ico" />
@@ -77,7 +77,7 @@ export default function RootLayout({
         
         {/* Performance Optimization */}
       </head>
-      <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`}>
+      <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`} suppressHydrationWarning>   {/* ⭐ Added suppressHydrationWarning */}
         {/* ✅ Sab client-side scripts ek saath yahan */}
         <Scripts />
 
