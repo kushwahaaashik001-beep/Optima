@@ -5,7 +5,7 @@ import { ExternalLink, Zap, Sparkles, Bookmark, Star } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
-// Lead type – exact match with your new table
+// ✅ Lead type – exactly matching your new database table
 export interface Lead {
   id: string;
   title: string;
@@ -23,9 +23,17 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
+  // Optional old callbacks (if needed elsewhere)
+  onContacted?: (id: string) => void;
+  onInterview?: (id: string) => void;
+  onRejected?: (id: string) => void;
 }
 
-export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }: JobCardProps) {
+export default function JobCard({
+  lead,
+  onGeneratePitch,
+  creditsRemaining = 3,
+}: JobCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
