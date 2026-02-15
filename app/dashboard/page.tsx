@@ -182,5 +182,4 @@ function DashboardContent() {
   );
 }
 
-// ⭐ Dynamic export – SSR off, hydration error solved
 export default dynamic(() => Promise.resolve(DashboardContent), { ssr: false });
