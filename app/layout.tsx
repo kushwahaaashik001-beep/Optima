@@ -76,7 +76,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         
         {/* Performance Optimization */}
-        <link rel="preload" href="/api/health" as="fetch" crossOrigin="anonymous" />
       </head>
       <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`}>
         {/* ✅ Sab client-side scripts ek saath yahan */}
