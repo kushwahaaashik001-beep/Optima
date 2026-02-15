@@ -13,7 +13,7 @@ import { updateUserCredits, logUserActivity } from '@/lib/supabase';
 
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-// ⭐ Dashboard ka saara logic yahan rahega
+// ⭐ Saara logic yahan – same as before
 function DashboardContent() {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   const [credits, setCredits] = useState(3);
@@ -221,5 +221,5 @@ function DashboardContent() {
   );
 }
 
-// ⭐ Dynamic export – SSR band, hydration error khatam
+// ⭐ MAGIC: SSR off – hydration error gone forever
 export default dynamic(() => Promise.resolve(DashboardContent), { ssr: false });
