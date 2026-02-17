@@ -50,8 +50,10 @@ export default function HomePage() {
         setLeads(data || []);
         setFilteredLeads(data || []);
 
+        // Extract unique skills for filter
         const skills = data?.map(l => l.skill).filter(Boolean) as string[];
-        setAvailableSkills([...new Set(skills)]);
+        // ✅ FIX: Use Array.from instead of spread to avoid downlevel iteration error
+        setAvailableSkills(Array.from(new Set(skills)));
       } catch (err) {
         console.error('Error fetching leads:', err);
         toast.error('Failed to load leads');
@@ -81,7 +83,7 @@ export default function HomePage() {
     };
   }, []);
 
-  // Filter logic
+  // Apply filters whenever search query or skill changes
   useEffect(() => {
     let filtered = leads;
 
