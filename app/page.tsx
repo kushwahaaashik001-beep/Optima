@@ -172,7 +172,7 @@ export default function HomePage() {
         },
       };
 
-      const razorpay = new window.Razorpay(options);
+      const razorpay = new (window as any).Razorpay(options);
       razorpay.open();
     } catch (error) {
       console.error('Payment error:', error);
