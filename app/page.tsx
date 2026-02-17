@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import JobCard, { Lead } from '@/components/JobCard';
 import UpgradeModal from '@/components/UpgradeModal';
-import SearchBar from '@/components/SearchBar';
-import SkillFilter from '@/components/SkillFilter';
+import SearchBar from '@/components/SearchBar';      // ✅ Correct import
+import SkillFilter from '@/components/SkillFilter';  // ✅ Correct import
 import { toast } from 'react-hot-toast';
 import { Crown, TrendingUp, Check, Loader, LogIn, UserPlus } from 'lucide-react';
 import Link from 'next/link';
@@ -52,7 +52,6 @@ export default function HomePage() {
 
         // Extract unique skills for filter
         const skills = data?.map(l => l.skill).filter(Boolean) as string[];
-        // ✅ FIX: Use Array.from instead of spread to avoid downlevel iteration error
         setAvailableSkills(Array.from(new Set(skills)));
       } catch (err) {
         console.error('Error fetching leads:', err);
@@ -83,7 +82,7 @@ export default function HomePage() {
     };
   }, []);
 
-  // Apply filters whenever search query or skill changes
+  // Apply filters
   useEffect(() => {
     let filtered = leads;
 
@@ -162,7 +161,6 @@ export default function HomePage() {
             toast.error('Failed to activate Pro. Contact support.');
           } else {
             toast.success('You are now a Pro user!');
-            // Refresh user or update local state
           }
         },
         prefill: {
@@ -174,7 +172,7 @@ export default function HomePage() {
         },
       };
 
-     const razorpay = new (window as any).Razorpay(options);
+      const razorpay = new window.Razorpay(options);
       razorpay.open();
     } catch (error) {
       console.error('Payment error:', error);
@@ -191,7 +189,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Auth Buttons (Top Right) */}
+      {/* Auth Buttons */}
       <div className="absolute top-4 right-4 flex gap-2">
         {user ? (
           <button
