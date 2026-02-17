@@ -4,12 +4,23 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import JobCard, { Lead } from '@/components/JobCard';
 import UpgradeModal from '@/components/UpgradeModal';
-import SearchBar from '@/components/SearchBar';      // ✅ Correct import
-import SkillFilter from '@/components/SkillFilter';  // ✅ Correct import
+import SearchBar from '@/components/SearchBar';
+import SkillFilter from '@/components/SkillFilter';
 import { toast } from 'react-hot-toast';
 import { Crown, TrendingUp, Check, Loader, LogIn, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
+// 🌟 Top 25 in-demand skills (static base)
+const STATIC_SKILLS = [
+  "Video Editing", "Motion Graphics", "React.js", "Next.js", 
+  "UI/UX Design", "Graphic Design", "Social Media Management",
+  "Digital Marketing", "Python", "Full Stack Development", 
+  "Mobile App Development", "Content Writing", "SEO",
+  "Shopify Development", "WordPress", "Data Analysis",
+  "AI Integration", "Blockchain", "Copywriting", "Email Marketing",
+  "Cloud Computing", "Cybersecurity", "Logo Design", "Lead Generation", "E-commerce Specialist"
+];
 
 export default function HomePage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -19,7 +30,7 @@ export default function HomePage() {
   const [credits] = useState(3);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
-  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
+  const [availableSkills, setAvailableSkills] = useState<string[]>(STATIC_SKILLS); // ✅ Static + dynamic merge
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
@@ -35,7 +46,7 @@ export default function HomePage() {
     return () => listener?.subscription.unsubscribe();
   }, []);
 
-  // Fetch leads
+  // Fetch leads and merge skills
   useEffect(() => {
     const fetchLeads = async () => {
       setLoading(true);
@@ -50,9 +61,14 @@ export default function HomePage() {
         setLeads(data || []);
         setFilteredLeads(data || []);
 
-        // Extract unique skills for filter
-        const skills = data?.map(l => l.skill).filter(Boolean) as string[];
-        setAvailableSkills(Array.from(new Set(skills)));
+        // Extract unique skills from fetched leads
+        const extractedSkills = data
+          ?.map(l => l.skill)
+          .filter(Boolean) as string[];
+        const uniqueExtracted = Array.from(new Set(extractedSkills));
+
+        // Merge with static skills (no duplicates)
+        setAvailableSkills(Array.from(new Set([...STATIC_SKILLS, ...uniqueExtracted])));
       } catch (err) {
         console.error('Error fetching leads:', err);
         toast.error('Failed to load leads');
@@ -72,6 +88,14 @@ export default function HomePage() {
           const newLead = payload.new as Lead;
           setLeads((prev) => [newLead, ...prev]);
           setFilteredLeads((prev) => [newLead, ...prev]);
+
+          // Also update availableSkills if new skill appears
+          if (newLead.skill) {
+            setAvailableSkills(prev => 
+              prev.includes(newLead.skill!) ? prev : [...prev, newLead.skill!]
+            );
+          }
+
           toast.success('🔥 New lead arrived!');
         }
       )
@@ -172,7 +196,7 @@ export default function HomePage() {
         },
       };
 
-      const razorpay = new (window as any).Razorpay(options);
+      const razorpay = new window.Razorpay(options);
       razorpay.open();
     } catch (error) {
       console.error('Payment error:', error);
