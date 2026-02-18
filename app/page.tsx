@@ -27,7 +27,6 @@ export default function HomePage() {
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
-  // Gemini: Updated state
   const [credits, setCredits] = useState<number>(0);
   const [isPro, setIsPro] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,11 +47,10 @@ export default function HomePage() {
     return () => listener?.subscription.unsubscribe();
   }, []);
 
-  // Gemini: Fetch profile data (credits, is_pro) when user changes
+  // Fetch profile data (credits, is_pro) when user changes
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user) {
-        // Reset to defaults when logged out
         setCredits(0);
         setIsPro(false);
         return;
@@ -91,13 +89,11 @@ export default function HomePage() {
         setLeads(data || []);
         setFilteredLeads(data || []);
 
-        // Extract unique skills from fetched leads
         const extractedSkills = data
           ?.map(l => l.skill)
           .filter(Boolean) as string[];
         const uniqueExtracted = Array.from(new Set(extractedSkills));
 
-        // Merge with static skills (no duplicates)
         setAvailableSkills(Array.from(new Set([...STATIC_SKILLS, ...uniqueExtracted])));
       } catch (err) {
         console.error('Error fetching leads:', err);
@@ -119,7 +115,6 @@ export default function HomePage() {
           setLeads((prev) => [newLead, ...prev]);
           setFilteredLeads((prev) => [newLead, ...prev]);
 
-          // Also update availableSkills if new skill appears
           if (newLead.skill) {
             setAvailableSkills(prev => 
               prev.includes(newLead.skill!) ? prev : [...prev, newLead.skill!]
@@ -157,17 +152,29 @@ export default function HomePage() {
     setFilteredLeads(filtered);
   }, [searchQuery, selectedSkill, leads]);
 
+  // ✅ Updated generate pitch handler with login-first logic
   const handleGeneratePitch = async (lead: Lead) => {
+    // Step 1: Check if user is logged in
     if (!user) {
-      toast.error('Please login to generate AI pitch');
-      router.push('/login');
+      toast.error('Pehle account banayein ya login karein!', {
+        icon: '🔒',
+        duration: 4000,
+      });
+      // Redirect to signup page, but remember which lead they wanted
+      sessionStorage.setItem('pendingLeadId', lead.id);
+      router.push('/signup');
       return;
     }
+
+    // Step 2: Check credits
     if (credits <= 0) {
       setIsProModalOpen(true);
       return;
     }
-    toast.success(`✨ Demo: AI Pitch for "${lead.title}" (1 credit used)`);
+
+    // Step 3: All good – generate pitch (demo for now)
+    toast.success(`✨ Generating AI Pitch for "${lead.title}"...`);
+    // Here you would call your actual API endpoint
   };
 
   // Razorpay integration
@@ -215,7 +222,6 @@ export default function HomePage() {
             toast.error('Failed to activate Pro. Contact support.');
           } else {
             toast.success('You are now a Pro user!');
-            // Refetch profile to update local state
             const { data } = await supabase
               .from('profiles')
               .select('credits, is_pro')
@@ -442,6 +448,14 @@ export default function HomePage() {
           </aside>
         </div>
       </main>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={isProModalOpen}
+        onClose={() => setIsProModalOpen(false)}
+        onUpgrade={handleUpgrade}
+        loading={paymentLoading}
+      />
     </div>
   );
 }
