@@ -370,6 +370,8 @@ export default function HomePage() {
                     lead={lead}
                     onGeneratePitch={handleGeneratePitch}
                     creditsRemaining={credits}
+                    // ✅ Pass login status to JobCard for conditional UI
+                    isLoggedIn={!!user}
                   />
                 ))}
               </div>
