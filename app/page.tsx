@@ -368,7 +368,7 @@ export default function HomePage() {
                       Processing...
                     </>
                   ) : (
-                    'Upgrade – ₹29/month'
+                    'Upgrade – ₹199/month'
                   )}
                 </button>
                 <p className="text-xs text-indigo-200 text-center mt-3">
