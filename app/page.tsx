@@ -27,10 +27,12 @@ export default function HomePage() {
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
-  const [credits] = useState(3);
+  // Gemini: Updated state
+  const [credits, setCredits] = useState<number>(0);
+  const [isPro, setIsPro] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
-  const [availableSkills, setAvailableSkills] = useState<string[]>(STATIC_SKILLS); // ✅ Static + dynamic merge
+  const [availableSkills, setAvailableSkills] = useState<string[]>(STATIC_SKILLS);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
@@ -45,6 +47,34 @@ export default function HomePage() {
     });
     return () => listener?.subscription.unsubscribe();
   }, []);
+
+  // Gemini: Fetch profile data (credits, is_pro) when user changes
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) {
+        // Reset to defaults when logged out
+        setCredits(0);
+        setIsPro(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('credits, is_pro')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        toast.error('Failed to load user profile');
+      } else if (data) {
+        setCredits(data.credits);
+        setIsPro(data.is_pro);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
 
   // Fetch leads and merge skills
   useEffect(() => {
@@ -185,6 +215,16 @@ export default function HomePage() {
             toast.error('Failed to activate Pro. Contact support.');
           } else {
             toast.success('You are now a Pro user!');
+            // Refetch profile to update local state
+            const { data } = await supabase
+              .from('profiles')
+              .select('credits, is_pro')
+              .eq('id', user.id)
+              .single();
+            if (data) {
+              setCredits(data.credits);
+              setIsPro(data.is_pro);
+            }
           }
         },
         prefill: {
