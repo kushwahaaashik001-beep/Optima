@@ -23,8 +23,8 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
-  isLoggedIn?: boolean; // ✅ New prop from page.tsx
-  // Optional old props for compatibility
+  isLoggedIn?: boolean;   // ✅ New prop – tells us if user is authenticated
+  // (Optional old props kept for compatibility)
   onContacted?: (id: string) => void;
   onInterview?: (id: string) => void;
   onRejected?: (id: string) => void;
@@ -37,7 +37,7 @@ export default function JobCard({
   lead, 
   onGeneratePitch, 
   creditsRemaining = 3,
-  isLoggedIn = false, // Default to false
+  isLoggedIn = false,   // default to false (not logged in)
 }: JobCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -45,7 +45,7 @@ export default function JobCard({
   if (!lead) return null;
 
   const handleGeneratePitch = async () => {
-    if (!onGeneratePitch || isGenerating) return; // Remove credit check here; parent handles it
+    if (!onGeneratePitch || isGenerating) return;   // parent handles all checks
     setIsGenerating(true);
     try {
       await onGeneratePitch(lead);
@@ -60,12 +60,16 @@ export default function JobCard({
   // Determine button text based on login and credits
   let buttonText = 'Generate AI Pitch';
   let showCreditBadge = true;
+  let buttonGradient = 'bg-gradient-to-r from-blue-600 to-indigo-600'; // default logged-in with credits
+
   if (!isLoggedIn) {
     buttonText = 'Login to Generate';
     showCreditBadge = false;
+    buttonGradient = 'bg-gradient-to-r from-blue-500 to-blue-600'; // slightly different shade for login
   } else if (creditsRemaining <= 0) {
     buttonText = 'Upgrade to Generate';
     showCreditBadge = false;
+    buttonGradient = 'bg-gradient-to-r from-amber-600 to-orange-600';
   }
 
   return (
@@ -112,17 +116,11 @@ export default function JobCard({
         {/* AI Pitch Button */}
         <button
           onClick={handleGeneratePitch}
-          disabled={isGenerating} // Only disable when generating; parent handles logic
+          disabled={isGenerating} // only disable while generating; parent logic handles navigation
           className={`
             flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm
-            transition-all active:scale-[0.98]
-            ${
-              !isLoggedIn
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200' // Login button style
-                : creditsRemaining > 0
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-200 hover:shadow-lg'
-                  : 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-200'
-            }
+            transition-all active:scale-[0.98] text-white shadow-md
+            ${buttonGradient}
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
         >
