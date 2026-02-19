@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     };
 
     // 5. Fire notification
-    await sendLeadNotification(notificationLead);
+    await sendLeadNotification(notificationLead as any);
 
     const duration = Date.now() - startTime;
     console.log(`[${requestId}] Notification sent for lead ${lead.id} in ${duration}ms`);
