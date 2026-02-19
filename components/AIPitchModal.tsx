@@ -1,43 +1,15 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Context: Ek hi baar import karein
-import { useUser } from '../app/context/UserContext';
-
-// Icons: Saare icons ek hi list mein (Double entries hata di hain)
-import { 
-  X, 
-  Sparkles, 
-  Send, 
-  Copy, 
-  Check, 
-  Zap, 
-  Target, 
-  Briefcase, 
-  MapPin, 
-  Clock, 
-  Download, 
-  Share2, 
-  Edit, 
-  RefreshCw, 
-  Volume2, 
-  Eye, 
-  EyeOff, 
-  Save, 
-  History, 
-  TrendingUp, 
-  Users, 
-  Award, 
-  MessageSquare, 
-  ThumbsUp, 
-  Star 
-} from 'lucide-react';
-
+import { useUser } from '@/app/context/UserContext';
 import { toast } from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
-import { Lead } from '../app/hooks/useLeads'; // Iska path bhi relative kar diya
+import {
+  X, Sparkles, Send, Copy, Check, Zap, Target, Briefcase, MapPin, Clock,
+  Download, Share2, Edit, RefreshCw, Volume2, Eye, EyeOff, Save, History,
+  TrendingUp, Users, Award, MessageSquare, ThumbsUp, Star, Settings2, Loader2
+} from 'lucide-react';
+import type { Lead } from '@/app/hooks/useLeads';
 
 interface AIPitchModalProps {
   isOpen: boolean;
@@ -46,6 +18,7 @@ interface AIPitchModalProps {
   lead: Lead;
   onRegenerate?: () => Promise<string>;
   onSave?: (pitch: string) => Promise<void>;
+  isRegenerating?: boolean; // from parent to show loading state
 }
 
 interface PitchVersion {
@@ -68,13 +41,14 @@ const PITCH_LENGTHS = [
   { id: 'long', name: 'Long (300 words)', duration: '2min read' },
 ];
 
-export default function AIPitchModal({ 
-  isOpen, 
-  onClose, 
-  pitch, 
-  lead, 
+export default function AIPitchModal({
+  isOpen,
+  onClose,
+  pitch,
+  lead,
   onRegenerate,
-  onSave 
+  onSave,
+  isRegenerating = false
 }: AIPitchModalProps) {
   const { isPro } = useUser();
   const [currentPitch, setCurrentPitch] = useState(pitch);
@@ -89,17 +63,17 @@ export default function AIPitchModal({
   ]);
   const [customInstructions, setCustomInstructions] = useState('');
   const [rating, setRating] = useState<number>(0);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Initialize with provided pitch
+  // Update when pitch prop changes
   useEffect(() => {
-    if (pitch && pitchVersions.length === 1) {
+    if (pitch) {
       setCurrentPitch(pitch);
-      setPitchVersions([{ 
-        id: 1, 
-        content: pitch, 
-        timestamp: new Date().toLocaleTimeString(),
-        rating: 4.5
-      }]);
+      setPitchVersions(prev => {
+        // Avoid duplicate if same content
+        if (prev[0]?.content === pitch) return prev;
+        return [{ id: Date.now(), content: pitch, timestamp: new Date().toLocaleTimeString() }, ...prev];
+      });
     }
   }, [pitch]);
 
@@ -129,20 +103,13 @@ export default function AIPitchModal({
       toast.error('Upgrade to Pro to regenerate pitches');
       return;
     }
+    if (!onRegenerate) return;
 
     setIsGenerating(true);
     try {
-      if (onRegenerate) {
-        const newPitch = await onRegenerate();
-        const newVersion: PitchVersion = {
-          id: pitchVersions.length + 1,
-          content: newPitch,
-          timestamp: new Date().toLocaleTimeString(),
-        };
-        setCurrentPitch(newPitch);
-        setPitchVersions(prev => [newVersion, ...prev]);
-        toast.success('Pitch regenerated successfully!');
-      }
+      const newPitch = await onRegenerate();
+      // The parent will update pitch prop, which will trigger useEffect
+      toast.success('Pitch regenerated successfully!');
     } catch (error) {
       toast.error('Failed to regenerate pitch');
     } finally {
@@ -152,13 +119,17 @@ export default function AIPitchModal({
 
   // Handle save pitch
   const handleSave = async () => {
+    if (!isPro) {
+      toast.error('Upgrade to Pro to save pitches');
+      return;
+    }
     if (onSave) {
       await onSave(currentPitch);
       toast.success('Pitch saved to your collection!');
     }
   };
 
-  // Handle share pitch
+  // Handle share
   const handleShare = async () => {
     if (navigator.share) {
       try {
@@ -168,7 +139,7 @@ export default function AIPitchModal({
           url: window.location.href,
         });
       } catch (error) {
-        console.log('Sharing cancelled');
+        // User cancelled share
       }
     } else {
       navigator.clipboard.writeText(window.location.href);
@@ -178,6 +149,10 @@ export default function AIPitchModal({
 
   // Handle text-to-speech
   const handleTextToSpeech = () => {
+    if (!isPro) {
+      toast.error('Upgrade to Pro to use text-to-speech');
+      return;
+    }
     if ('speechSynthesis' in window) {
       const speech = new SpeechSynthesisUtterance(currentPitch);
       speech.rate = 1;
@@ -192,11 +167,14 @@ export default function AIPitchModal({
 
   // Handle rating
   const handleRate = (stars: number) => {
+    if (!isPro) {
+      toast.error('Upgrade to Pro to rate pitches');
+      return;
+    }
     setRating(stars);
     toast.success(`Rated ${stars} stars!`);
-    
     // Update the rating in the current version
-    setPitchVersions(prev => prev.map((version, index) => 
+    setPitchVersions(prev => prev.map((version, index) =>
       index === 0 ? { ...version, rating: stars } : version
     ));
   };
@@ -206,7 +184,7 @@ export default function AIPitchModal({
     const words = text.split(/\s+/).length;
     const sentences = text.split(/[.!?]+/).length - 1;
     const readingTime = Math.ceil(words / 200); // 200 words per minute
-    const keywords = ['experienced', 'passionate', 'skilled', 'proven', 'expert'].filter(word => 
+    const keywords = ['experienced', 'passionate', 'skilled', 'proven', 'expert'].filter(word =>
       text.toLowerCase().includes(word)
     ).length;
 
@@ -229,6 +207,8 @@ export default function AIPitchModal({
       document.body.style.overflow = 'unset';
     };
   }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
 
   return (
     <AnimatePresence>
@@ -267,7 +247,7 @@ export default function AIPitchModal({
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-3">
                     {isPro && (
                       <div className="flex items-center px-3 py-1.5 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg">
@@ -286,9 +266,9 @@ export default function AIPitchModal({
               </div>
 
               {/* Content */}
-              <div className="flex h-[600px]">
-                {/* Left Panel - Controls */}
-                <div className="w-80 border-r border-gray-800 bg-gray-900/50 p-6 overflow-y-auto">
+              <div className="flex flex-col lg:flex-row h-[600px]">
+                {/* Left Panel - Controls (hidden on mobile, togglable) */}
+                <div className="lg:w-80 border-r border-gray-800 bg-gray-900/50 p-6 overflow-y-auto hidden lg:block">
                   {/* Lead Info Card */}
                   <div className="mb-6 p-4 bg-gray-800/30 rounded-xl">
                     <div className="flex items-start space-x-3 mb-4">
@@ -304,7 +284,7 @@ export default function AIPitchModal({
                         <p className="text-sm text-gray-400">{lead.title}</p>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center text-gray-300">
                         <MapPin className="w-4 h-4 mr-2 text-gray-500" />
@@ -321,7 +301,7 @@ export default function AIPitchModal({
                     </div>
                   </div>
 
-                  {/* Tone Selection */}
+                  {/* Tone Selection (Pro only) */}
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
                       Pitch Tone
@@ -330,18 +310,19 @@ export default function AIPitchModal({
                       {PITCH_TONES.map((tone) => (
                         <button
                           key={tone.id}
-                          onClick={() => setSelectedTone(tone.id)}
+                          onClick={() => isPro ? setSelectedTone(tone.id) : toast.error('Upgrade to Pro to change tone')}
                           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all ${
-                            selectedTone === tone.id
+                            selectedTone === tone.id && isPro
                               ? 'bg-purple-600 text-white'
                               : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          }`}
+                          } ${!isPro && 'opacity-50 cursor-not-allowed'}`}
+                          disabled={!isPro}
                         >
                           <div className="flex items-center space-x-3">
                             {tone.icon}
                             <span>{tone.name}</span>
                           </div>
-                          {selectedTone === tone.id && (
+                          {selectedTone === tone.id && isPro && (
                             <Check className="w-4 h-4" />
                           )}
                         </button>
@@ -349,7 +330,7 @@ export default function AIPitchModal({
                     </div>
                   </div>
 
-                  {/* Length Selection */}
+                  {/* Length Selection (Pro only) */}
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
                       Pitch Length
@@ -358,18 +339,19 @@ export default function AIPitchModal({
                       {PITCH_LENGTHS.map((length) => (
                         <button
                           key={length.id}
-                          onClick={() => setSelectedLength(length.id)}
+                          onClick={() => isPro ? setSelectedLength(length.id) : toast.error('Upgrade to Pro to change length')}
                           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all ${
-                            selectedLength === length.id
+                            selectedLength === length.id && isPro
                               ? 'bg-blue-600 text-white'
                               : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                          }`}
+                          } ${!isPro && 'opacity-50 cursor-not-allowed'}`}
+                          disabled={!isPro}
                         >
                           <div>
                             <div className="text-left">{length.name}</div>
                             <div className="text-xs text-gray-400">{length.duration}</div>
                           </div>
-                          {selectedLength === length.id && (
+                          {selectedLength === length.id && isPro && (
                             <Check className="w-4 h-4" />
                           )}
                         </button>
@@ -377,16 +359,17 @@ export default function AIPitchModal({
                     </div>
                   </div>
 
-                  {/* Custom Instructions */}
+                  {/* Custom Instructions (Pro only) */}
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
                       Custom Instructions
                     </h3>
                     <textarea
                       value={customInstructions}
-                      onChange={(e) => setCustomInstructions(e.target.value)}
-                      placeholder="Add specific points to include..."
-                      className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none"
+                      onChange={(e) => isPro ? setCustomInstructions(e.target.value) : toast.error('Upgrade to Pro to add instructions')}
+                      placeholder={isPro ? "Add specific points to include..." : "Pro feature – upgrade to access"}
+                      disabled={!isPro}
+                      className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -416,6 +399,23 @@ export default function AIPitchModal({
                   </div>
                 </div>
 
+                {/* Mobile settings toggle */}
+                <div className="lg:hidden p-4 border-b border-gray-800">
+                  <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className="flex items-center gap-2 text-gray-300 hover:text-white"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                    <span>{showSettings ? 'Hide settings' : 'Show settings'}</span>
+                  </button>
+                </div>
+                {showSettings && (
+                  <div className="lg:hidden p-4 bg-gray-900/50 border-b border-gray-800 max-h-80 overflow-y-auto">
+                    {/* Simplified version of left panel for mobile */}
+                    {/* ... you can include a condensed version of the controls */}
+                  </div>
+                )}
+
                 {/* Main Content - Pitch */}
                 <div className="flex-1 flex flex-col">
                   {/* Pitch Header */}
@@ -424,40 +424,48 @@ export default function AIPitchModal({
                       <div>
                         <h3 className="text-lg font-semibold text-white">Generated Pitch</h3>
                         <p className="text-sm text-gray-400">
-                          Optimized for {selectedTone} tone • {PITCH_LENGTHS.find(l => l.id === selectedLength)?.name}
+                          {isPro ? `Optimized for ${selectedTone} tone • ${PITCH_LENGTHS.find(l => l.id === selectedLength)?.name}` : 'Upgrade to Pro for advanced customization'}
                         </p>
                       </div>
-                      
+
                       <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setShowHistory(!showHistory)}
-                          className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                          <History className="w-4 h-4" />
-                          <span className="text-sm">History</span>
-                        </button>
-                        <button
-                          onClick={handleRegenerate}
-                          disabled={isGenerating}
-                          className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50"
-                        >
-                          <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                          <span className="text-sm">Regenerate</span>
-                        </button>
+                        {isPro && (
+                          <button
+                            onClick={() => setShowHistory(!showHistory)}
+                            className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                          >
+                            <History className="w-4 h-4" />
+                            <span className="text-sm hidden sm:inline">History</span>
+                          </button>
+                        )}
+                        {onRegenerate && (
+                          <button
+                            onClick={handleRegenerate}
+                            disabled={isGenerating || !isPro}
+                            className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                          >
+                            {isGenerating ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            <span className="text-sm hidden sm:inline">Regenerate</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {/* Pitch Content */}
                   <div className="flex-1 p-6 overflow-y-auto">
-                    {showHistory ? (
+                    {showHistory && isPro ? (
                       <div className="space-y-4">
                         <h4 className="font-semibold text-white mb-4">Previous Versions</h4>
                         {pitchVersions.map((version) => (
                           <div
                             key={version.id}
                             className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                              version.id === 1
+                              version.id === pitchVersions[0]?.id
                                 ? 'bg-gradient-to-r from-purple-900/20 to-blue-900/20 border-purple-500/30'
                                 : 'bg-gray-800/30 border-gray-700 hover:border-gray-600'
                             }`}
@@ -492,7 +500,7 @@ export default function AIPitchModal({
                       </div>
                     ) : (
                       <div className="relative">
-                        {isEditing ? (
+                        {isEditing && isPro ? (
                           <textarea
                             value={currentPitch}
                             onChange={(e) => setCurrentPitch(e.target.value)}
@@ -508,23 +516,25 @@ export default function AIPitchModal({
                           </div>
                         )}
 
-                        {/* Edit Toggle */}
-                        <button
-                          onClick={() => setIsEditing(!isEditing)}
-                          className="absolute top-4 right-4 flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                          {isEditing ? (
-                            <>
-                              <Eye className="w-4 h-4" />
-                              <span className="text-sm">Preview</span>
-                            </>
-                          ) : (
-                            <>
-                              <Edit className="w-4 h-4" />
-                              <span className="text-sm">Edit</span>
-                            </>
-                          )}
-                        </button>
+                        {/* Edit Toggle (Pro only) */}
+                        {isPro && (
+                          <button
+                            onClick={() => setIsEditing(!isEditing)}
+                            className="absolute top-4 right-4 flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                          >
+                            {isEditing ? (
+                              <>
+                                <Eye className="w-4 h-4" />
+                                <span className="text-sm">Preview</span>
+                              </>
+                            ) : (
+                              <>
+                                <Edit className="w-4 h-4" />
+                                <span className="text-sm">Edit</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -533,47 +543,57 @@ export default function AIPitchModal({
                   <div className="p-6 border-t border-gray-800">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-center space-x-3">
-                        {/* Text-to-Speech */}
+                        {/* Text-to-Speech (Pro only) */}
                         <button
                           onClick={handleTextToSpeech}
-                          className="flex items-center space-x-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                          disabled={!isPro}
+                          className={`flex items-center space-x-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors ${
+                            !isPro && 'opacity-50 cursor-not-allowed'
+                          }`}
                         >
                           <Volume2 className="w-4 h-4" />
-                          <span className="text-sm">Listen</span>
+                          <span className="text-sm hidden sm:inline">Listen</span>
                         </button>
 
-                        {/* Rate Pitch */}
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm text-gray-400">Rate:</span>
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <button
-                                key={star}
-                                onClick={() => handleRate(star)}
-                                className="p-1 hover:scale-110 transition-transform"
-                              >
-                                <Star
-                                  className={`w-5 h-5 ${
-                                    star <= rating
-                                      ? 'text-yellow-400 fill-yellow-400'
-                                      : 'text-gray-600'
-                                  }`}
-                                />
-                              </button>
-                            ))}
+                        {/* Rate Pitch (Pro only) */}
+                        {isPro && (
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm text-gray-400 hidden sm:inline">Rate:</span>
+                            <div className="flex">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  onClick={() => handleRate(star)}
+                                  className="p-1 hover:scale-110 transition-transform"
+                                >
+                                  <Star
+                                    className={`w-5 h-5 ${
+                                      star <= rating
+                                        ? 'text-yellow-400 fill-yellow-400'
+                                        : 'text-gray-600'
+                                    }`}
+                                  />
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       <div className="flex items-center space-x-3">
-                        {/* Save */}
-                        <button
-                          onClick={handleSave}
-                          className="flex items-center space-x-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                          <Save className="w-4 h-4" />
-                          <span className="text-sm">Save</span>
-                        </button>
+                        {/* Save (Pro only) */}
+                        {onSave && (
+                          <button
+                            onClick={handleSave}
+                            disabled={!isPro}
+                            className={`flex items-center space-x-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors ${
+                              !isPro && 'opacity-50 cursor-not-allowed'
+                            }`}
+                          >
+                            <Save className="w-4 h-4" />
+                            <span className="text-sm hidden sm:inline">Save</span>
+                          </button>
+                        )}
 
                         {/* Share */}
                         <button
@@ -581,7 +601,7 @@ export default function AIPitchModal({
                           className="flex items-center space-x-2 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
                         >
                           <Share2 className="w-4 h-4" />
-                          <span className="text-sm">Share</span>
+                          <span className="text-sm hidden sm:inline">Share</span>
                         </button>
 
                         {/* Download */}
@@ -590,7 +610,7 @@ export default function AIPitchModal({
                           className="flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
                         >
                           <Download className="w-4 h-4" />
-                          <span className="text-sm">Download</span>
+                          <span className="text-sm hidden sm:inline">Download</span>
                         </button>
 
                         {/* Copy */}
@@ -601,26 +621,30 @@ export default function AIPitchModal({
                           {copied ? (
                             <>
                               <Check className="w-4 h-4" />
-                              <span className="text-sm">Copied!</span>
+                              <span className="text-sm hidden sm:inline">Copied!</span>
                             </>
                           ) : (
                             <>
                               <Copy className="w-4 h-4" />
-                              <span className="text-sm">Copy Pitch</span>
+                              <span className="text-sm hidden sm:inline">Copy</span>
                             </>
                           )}
                         </button>
 
-                        {/* Send Application */}
+                        {/* Apply Now */}
                         <button
                           onClick={() => {
-                            window.open(lead.application_url, '_blank');
-                            toast.success('Opening application page...');
+                            if (lead.application_url) {
+                              window.open(lead.application_url, '_blank');
+                              toast.success('Opening application page...');
+                            } else {
+                              toast.error('Application URL not available');
+                            }
                           }}
                           className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-green-600 to-emerald-500 text-white rounded-lg hover:opacity-90 transition-opacity"
                         >
                           <Send className="w-4 h-4" />
-                          <span className="text-sm">Apply Now</span>
+                          <span className="text-sm hidden sm:inline">Apply</span>
                         </button>
                       </div>
                     </div>
