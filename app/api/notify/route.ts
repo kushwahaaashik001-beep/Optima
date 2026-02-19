@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod'; // optional but recommended for validation
+import { z } from 'zod';
 import { sendLeadNotification } from '@/lib/notifications';
+import type { LeadNotification } from '@/lib/notifications';
 
-// Define expected lead shape (matches LeadNotification in lib)
+// Define expected lead shape (matches LeadNotification but allows number for budget)
 const leadSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
       throw new Error('Invalid JSON payload');
     });
 
-    // 2. Validate request body with Zod (or manual checks)
+    // 2. Validate request body with Zod
     const validation = requestSchema.safeParse(body);
     if (!validation.success) {
       console.warn(`[${requestId}] Validation failed:`, validation.error.format());
@@ -47,8 +48,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 4. Fire notification – non‑blocking but we await to ensure completion before response
-    await sendLeadNotification(lead);
+    // 4. Transform lead to match LeadNotification type (ensure budget is string)
+    const notificationLead: LeadNotification = {
+      id: lead.id,
+      title: lead.title,
+      company: lead.company,
+      description: lead.description,
+      url: lead.url,
+      // Convert budget to string if it's a number
+      budget: lead.budget !== undefined ? String(lead.budget) : undefined,
+      skill: lead.skill,
+    };
+
+    // 5. Fire notification
+    await sendLeadNotification(notificationLead);
 
     const duration = Date.now() - startTime;
     console.log(`[${requestId}] Notification sent for lead ${lead.id} in ${duration}ms`);
@@ -65,7 +78,6 @@ export async function POST(req: NextRequest) {
     const duration = Date.now() - startTime;
     console.error(`[${requestId}] Error after ${duration}ms:`, error.message);
 
-    // Return a generic error to the caller
     return NextResponse.json(
       { error: 'Internal server error. Please try again later.' },
       { status: 500 }
