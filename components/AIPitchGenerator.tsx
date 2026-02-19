@@ -3,18 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUser } from '@/app/context/UserContext';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import {
   Sparkles, Send, Copy, RefreshCw, Zap, Target, Edit, TrendingUp,
   Clock, BookOpen, MessageSquare, Check, AlertCircle, Settings2, Wand2, Loader2
 } from 'lucide-react';
-import AIPitchModal from './AIPitchModal'; // you'll create this separately
+import AIPitchModal from './AIPitchModal';
+import type { Lead } from '@/app/hooks/useLeads'; // adjust import as needed
 
 interface AIPitchGeneratorProps {
   leadId?: string;
+  lead?: Lead; // optional full lead object
   onPitchGenerated?: (pitch: string) => void;
-  onRefreshCredits?: () => void; // optional callback to refresh parent credits
+  onRefreshCredits?: () => void;
 }
 
 const TONE_OPTIONS = [
@@ -47,7 +48,7 @@ const SAMPLE_PITCHES = [
   }
 ];
 
-export default function AIPitchGenerator({ leadId, onPitchGenerated, onRefreshCredits }: AIPitchGeneratorProps) {
+export default function AIPitchGenerator({ leadId, lead, onPitchGenerated, onRefreshCredits }: AIPitchGeneratorProps) {
   const { isPro } = useUser();
   const [isGenerating, setIsGenerating] = useState(false);
   const [pitch, setPitch] = useState('');
@@ -113,7 +114,6 @@ export default function AIPitchGenerator({ leadId, onPitchGenerated, onRefreshCr
       setPitch(generatedPitch);
       setIsModalOpen(true);
       
-      // Add to history (optimistic)
       setGenerationHistory(prev => [{
         id: Date.now(),
         pitch: generatedPitch,
@@ -123,7 +123,7 @@ export default function AIPitchGenerator({ leadId, onPitchGenerated, onRefreshCr
       }, ...prev]);
 
       if (onPitchGenerated) onPitchGenerated(generatedPitch);
-      if (onRefreshCredits) onRefreshCredits(); // refresh parent credits after deduction
+      if (onRefreshCredits) onRefreshCredits();
 
       toast.success('AI Pitch generated successfully!');
     } catch (error: any) {
@@ -145,16 +145,16 @@ export default function AIPitchGenerator({ leadId, onPitchGenerated, onRefreshCr
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleRegenerate = () => {
+  // ✅ FIXED: now returns Promise<void> to match modal's expected type
+  const handleRegenerate = async () => {
     setPitch('');
-    handleGeneratePitch();
+    await handleGeneratePitch();
   };
 
   const handleUseSample = (sample: any) => {
     setSelectedTone('professional');
     setSelectedLength('medium');
     setCustomInstructions(sample.description);
-    // If leadId exists, auto‑generate after a tiny delay
     if (leadId) {
       setTimeout(() => handleGeneratePitch(), 100);
     }
@@ -211,7 +211,7 @@ export default function AIPitchGenerator({ leadId, onPitchGenerated, onRefreshCr
           </div>
         </div>
 
-        {/* Advanced Options Toggle (inside the main panel) */}
+        {/* Advanced Options Toggle */}
         <div className="mb-4">
           <button
             onClick={() => setShowTips(!showTips)}
@@ -348,7 +348,7 @@ export default function AIPitchGenerator({ leadId, onPitchGenerated, onRefreshCr
           </button>
         </div>
 
-        {/* Generation History (compact) */}
+        {/* Generation History */}
         {generationHistory.length > 0 && (
           <div className="mt-6">
             <div className="flex items-center justify-between mb-3">
@@ -401,16 +401,18 @@ export default function AIPitchGenerator({ leadId, onPitchGenerated, onRefreshCr
         </div>
       </div>
 
-      {/* Pitch Modal */}
-      <AIPitchModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        pitch={pitch}
-        onCopy={handleCopyPitch}
-        copied={copied}
-        onRegenerate={handleRegenerate}
-        isRegenerating={isGenerating}
-      />
+      {/* Pitch Modal - only render if we have a lead object */}
+      {lead && (
+        <AIPitchModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          pitch={pitch}
+          lead={lead}
+          onRegenerate={handleRegenerate}
+          isRegenerating={isGenerating}
+          // onSave and other props are optional; we omit them if not needed
+        />
+      )}
     </>
   );
 }
